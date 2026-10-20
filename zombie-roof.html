@@ -1,9 +1,14 @@
+<!doctype html>
+<html lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>גג הזומבים</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&family=Secular+One&display=swap">
 <style>
+[hidden]{display:none!important}
 /* Layout: one 16:9 stage centered in the viewport; the night scene is a canvas, HUD and menus are HTML layers on top. Single dark look by choice. */
 :root{
   --night:#0c0e1b;
@@ -107,7 +112,8 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
 @media (max-width:700px){.shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 </style>
-
+</head>
+<body>
 <div id="stage" dir="rtl">
   <canvas id="cv" aria-label="שדה המשחק"></canvas>
 
@@ -860,3 +866,5 @@ window.claude?.hot?.snapshot?.(() => G.mode === 'menu' ? {} : ({ level: G.level,
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
 </script>
+</body>
+</html>
