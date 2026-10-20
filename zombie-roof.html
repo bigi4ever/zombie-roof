@@ -215,18 +215,18 @@ const threatNote = n =>
   n === CFG.bossFrom ? 'שלב בוס: חצי זומבים ובוס עם RPG. 5 פגיעות משמידות את הטיל שלו' :
   isBossStage(n) ? 'שלב בוס: חצי זומבים ובוס עם RPG' : '';
 
-// cd = seconds between shots, speed = missile flight speed. Better missiles fire faster and fly faster.
+// Damage steps by 25 per missile. cd = seconds between shots, speed = missile flight speed. Better missiles fire faster and fly faster.
 const MISSILES = [
-  { name: 'טיל רגיל',    dmg: 50,  price: 0,   cd: 0.85, speed: 720,  color: '#ffd27a', glow: '#ff9b3d', splash: 30 },
-  { name: 'טיל אש',      dmg: 75,  price: 20,  cd: 0.72, speed: 800,  color: '#ff6a2b', glow: '#ff3b1f', splash: 38 },
-  { name: 'טיל קרח',     dmg: 100, price: 40,  cd: 0.6,  speed: 870,  color: '#8fe0ff', glow: '#3fb6ff', splash: 42, slow: true },
-  { name: 'טיל ברק',     dmg: 150, price: 60,  cd: 0.5,  speed: 940,  color: '#f6f26b', glow: '#fff7a8', splash: 46 },
-  { name: 'טיל פלזמה',   dmg: 200, price: 80,  cd: 0.4,  speed: 1020, color: '#c98bff', glow: '#9a4dff', splash: 58 },
-  { name: 'טיל גרעיני',  dmg: 300, price: 100, cd: 0.32, speed: 1100, color: '#7dff9a', glow: '#2fff6a', splash: 85 },
-  { name: 'טיל לייזר',   dmg: 450, price: 120, cd: 0.28, speed: 1180, color: '#ff4fd8', glow: '#ff1fa8', splash: 95 },
-  { name: 'טיל כוכב',    dmg: 650, price: 140, cd: 0.25, speed: 1250, color: '#ffffff', glow: '#9fdcff', splash: 105 },
-  { name: 'טיל שמש',     dmg: 900, price: 160, cd: 0.22, speed: 1320, color: '#ffb02e', glow: '#ff5a00', splash: 115 },
-  { name: 'טיל חור שחור', dmg: 1300, price: 180, cd: 0.2, speed: 1400, color: '#7a5cff', glow: '#2b0f7a', splash: 130 },
+  { name: 'טיל רגיל',    dmg: 50,  price: 0,   cd: 1.0, speed: 720,  color: '#ffd27a', glow: '#ff9b3d', splash: 30 },
+  { name: 'טיל אש',      dmg: 75,  price: 20,  cd: 0.833, speed: 800,  color: '#ff6a2b', glow: '#ff3b1f', splash: 38 },
+  { name: 'טיל קרח',     dmg: 100, price: 40,  cd: 0.667,  speed: 870,  color: '#8fe0ff', glow: '#3fb6ff', splash: 42, slow: true },
+  { name: 'טיל ברק',     dmg: 125, price: 60,  cd: 0.556,  speed: 940,  color: '#f6f26b', glow: '#fff7a8', splash: 46 },
+  { name: 'טיל פלזמה',   dmg: 150, price: 80,  cd: 0.435,  speed: 1020, color: '#c98bff', glow: '#9a4dff', splash: 58 },
+  { name: 'טיל גרעיני',  dmg: 175, price: 100, cd: 0.345, speed: 1100, color: '#7dff9a', glow: '#2fff6a', splash: 85 },
+  { name: 'טיל לייזר',   dmg: 200, price: 120, cd: 0.294, speed: 1180, color: '#ff4fd8', glow: '#ff1fa8', splash: 95 },
+  { name: 'טיל כוכב',    dmg: 225, price: 140, cd: 0.263, speed: 1250, color: '#ffffff', glow: '#9fdcff', splash: 105 },
+  { name: 'טיל שמש',     dmg: 250, price: 160, cd: 0.233, speed: 1320, color: '#ffb02e', glow: '#ff5a00', splash: 115 },
+  { name: 'טיל חור שחור', dmg: 275, price: 180, cd: 0.208, speed: 1400, color: '#7a5cff', glow: '#2b0f7a', splash: 130 },
 ];
 const rate = m => (1 / m.cd).toFixed(1);
 const FLYERS = [ { key: 'wing', sp: 1.1 }, { key: 'balloon', sp: 0.65 }, { key: 'jet', sp: 1.5 } ];
