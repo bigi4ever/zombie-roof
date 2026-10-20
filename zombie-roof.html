@@ -174,9 +174,10 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
 (() => {
 'use strict';
 // ---------- world constants ----------
-const W = 1280, H = 720, GROUND = 640, ROOF = 300, WALL = 300;
+// The world is wider than the screen ratio needs so zombies have a long street to cross; the canvas scales it to fit.
+const W = 1760, H = 990, GROUND = 900, ROOF = 560, WALL = 300;
 const PIVOT_Y = ROOF - 50;
-const SHOP = { x: 26, y: 196, w: 112, h: 104 };
+const SHOP = { x: 26, y: ROOF - 104, w: 112, h: 104 };
 
 // Every number the rules talk about lives here.
 const CFG = {
@@ -267,7 +268,7 @@ const G = {
   spawned: 0, toSpawn: 0, spawnT: 0, endT: 0,
   zombies: [], missiles: [], parts: [], texts: [], heads: [], rockets: [],
   shake: 0, cool: 0, time: 0, banner: 0, bossBanner: 0, bossAt: -1, firing: false,
-  mx: 900, my: 400, shopReturn: 'play',
+  mx: 1200, my: ROOF + 100, shopReturn: 'play',
 };
 const P = { x: 200, y: ROOF, hp: CFG.playerHp, hurt: 0, aim: 0.25, recoil: 0 };
 
@@ -343,14 +344,15 @@ const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
   b.fillStyle = sky; b.fillRect(0, 0, W, H);
   for (let i = 0; i < 140; i++) {
     b.fillStyle = `rgba(255,255,255,${0.2 + rnd() * 0.7})`;
-    b.fillRect(rnd() * W, rnd() * 380, rnd() < 0.1 ? 2 : 1, rnd() < 0.1 ? 2 : 1);
+    b.fillRect(rnd() * W, rnd() * (GROUND - 320), rnd() < 0.1 ? 2 : 1, rnd() < 0.1 ? 2 : 1);
   }
-  const mg = b.createRadialGradient(1010, 120, 30, 1010, 120, 160);
+  const MX = W - 330, MY = 150;
+  const mg = b.createRadialGradient(MX, MY, 30, MX, MY, 160);
   mg.addColorStop(0, 'rgba(220,235,190,.35)'); mg.addColorStop(1, 'rgba(220,235,190,0)');
-  b.fillStyle = mg; b.fillRect(840, 0, 340, 300);
-  b.fillStyle = '#e4ecc6'; b.beginPath(); b.arc(1010, 120, 44, 0, 7); b.fill();
+  b.fillStyle = mg; b.fillRect(MX - 170, MY - 160, 340, 320);
+  b.fillStyle = '#e4ecc6'; b.beginPath(); b.arc(MX, MY, 44, 0, 7); b.fill();
   b.fillStyle = 'rgba(150,170,120,.35)';
-  [[995, 108, 9], [1026, 132, 6], [1018, 100, 4]].forEach(([x, y, r]) => { b.beginPath(); b.arc(x, y, r, 0, 7); b.fill(); });
+  [[-15, -12, 9], [16, 12, 6], [8, -20, 4]].forEach(([x, y, r]) => { b.beginPath(); b.arc(MX + x, MY + y, r, 0, 7); b.fill(); });
   // skylines
   const sky1 = (col, minH, maxH, winA) => {
     let x = 280;
@@ -363,19 +365,22 @@ const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
       x += w + rnd() * 10;
     }
   };
-  sky1('#141631', 140, 330, 0.35);
-  sky1('#1b1d3c', 70, 200, 0.6);
+  sky1('#141631', 180, 460, 0.35);
+  sky1('#1b1d3c', 90, 260, 0.6);
   // street
   b.fillStyle = '#16161f'; b.fillRect(0, GROUND, W, H - GROUND);
   b.fillStyle = '#2a2933'; b.fillRect(0, GROUND, W, 10);
   b.fillStyle = '#3d3b47'; b.fillRect(0, GROUND, W, 2);
-  b.fillStyle = '#4b4a3a'; for (let x = 340; x < W; x += 90) b.fillRect(x, 684, 46, 4);
+  b.fillStyle = '#4b4a3a'; for (let x = 340; x < W; x += 90) b.fillRect(x, GROUND + 44, 46, 4);
   // street lamp
-  b.fillStyle = '#23222c'; b.fillRect(820, 470, 6, 170); b.fillRect(800, 468, 30, 6);
-  const lg = b.createRadialGradient(806, 478, 4, 806, 560, 150);
-  lg.addColorStop(0, 'rgba(255,220,140,.35)'); lg.addColorStop(1, 'rgba(255,220,140,0)');
-  b.fillStyle = lg; b.beginPath(); b.moveTo(800, 474); b.lineTo(700, GROUND); b.lineTo(920, GROUND); b.lineTo(812, 474); b.fill();
-  b.fillStyle = '#ffe3a0'; b.fillRect(800, 474, 12, 4);
+  for (const lx of [820, 1420]) {
+    const ty = GROUND - 170;
+    b.fillStyle = '#23222c'; b.fillRect(lx, ty, 6, 170); b.fillRect(lx - 20, ty - 2, 30, 6);
+    const lg = b.createRadialGradient(lx - 14, ty + 8, 4, lx - 14, ty + 90, 150);
+    lg.addColorStop(0, 'rgba(255,220,140,.35)'); lg.addColorStop(1, 'rgba(255,220,140,0)');
+    b.fillStyle = lg; b.beginPath(); b.moveTo(lx - 20, ty + 4); b.lineTo(lx - 120, GROUND); b.lineTo(lx + 100, GROUND); b.lineTo(lx - 8, ty + 4); b.fill();
+    b.fillStyle = '#ffe3a0'; b.fillRect(lx - 20, ty + 4, 12, 4);
+  }
   // the building
   b.fillStyle = '#3a3046'; b.fillRect(0, ROOF, WALL, GROUND - ROOF);
   b.strokeStyle = 'rgba(0,0,0,.18)'; b.lineWidth = 1;
@@ -431,7 +436,7 @@ function spawnZombie() {
   const r = Math.random();
   if (r < st.fly) {
     const f = FLYERS[Math.floor(Math.random() * FLYERS.length)];
-    z.fly = f.key; z.state = 'fly'; z.s *= 0.85; z.baseY = z.y = rand(170, 470);
+    z.fly = f.key; z.state = 'fly'; z.s *= 0.85; z.baseY = z.y = rand(ROOF - 390, ROOF + 170);
     z.speed = rand(44, 56) * f.sp * st.speed * CFG.zombieSpeed;
   } else if (r < st.fly + st.thrower) {
     z.thrower = true; z.throwX = rand(640, 1000);
@@ -966,25 +971,25 @@ function render() {
     const a = Math.min(1, G.banner * 1.5);
     ctx.globalAlpha = a; ctx.direction = 'rtl'; ctx.textAlign = 'center';
     ctx.font = "84px 'Secular One', Rubik, sans-serif";
-    ctx.lineWidth = 8; ctx.strokeStyle = '#132009'; ctx.strokeText('שלב ' + G.level, W / 2 + 120, 200);
-    ctx.fillStyle = '#8fd14f'; ctx.fillText('שלב ' + G.level, W / 2 + 120, 200);
+    ctx.lineWidth = 8; ctx.strokeStyle = '#132009'; ctx.strokeText('שלב ' + G.level, W / 2 + 120, 240);
+    ctx.fillStyle = '#8fd14f'; ctx.fillText('שלב ' + G.level, W / 2 + 120, 240);
     const st = levelStats(G.level);
     ctx.font = "500 26px Rubik, sans-serif"; ctx.fillStyle = '#eef0ff';
-    ctx.fillText(`${st.count} זומבים · ${st.hp} חיים לכל אחד · ${st.dmg} נזק לכל מכה`, W / 2 + 120, 262);
+    ctx.fillText(`${st.count} זומבים · ${st.hp} חיים לכל אחד · ${st.dmg} נזק לכל מכה`, W / 2 + 120, 302);
     const note = threatNote(G.level);
     if (note) {
       ctx.font = "30px 'Secular One', Rubik, sans-serif"; ctx.lineWidth = 6; ctx.strokeStyle = '#2a1d00';
-      ctx.strokeText(note, W / 2 + 120, 316); ctx.fillStyle = '#ffc94a'; ctx.fillText(note, W / 2 + 120, 316);
+      ctx.strokeText(note, W / 2 + 120, 356); ctx.fillStyle = '#ffc94a'; ctx.fillText(note, W / 2 + 120, 356);
     }
     ctx.direction = 'ltr'; ctx.globalAlpha = 1;
   }
   if (G.bossBanner > 0 && G.mode === 'play') {
     ctx.globalAlpha = Math.min(1, G.bossBanner * 1.5); ctx.direction = 'rtl'; ctx.textAlign = 'center';
     ctx.font = "96px 'Secular One', Rubik, sans-serif";
-    ctx.lineWidth = 10; ctx.strokeStyle = '#2a0808'; ctx.strokeText('הבוס הגיע', W / 2 + 120, 210);
-    ctx.fillStyle = '#ff4a3a'; ctx.fillText('הבוס הגיע', W / 2 + 120, 210);
+    ctx.lineWidth = 10; ctx.strokeStyle = '#2a0808'; ctx.strokeText('הבוס הגיע', W / 2 + 120, 250);
+    ctx.fillStyle = '#ff4a3a'; ctx.fillText('הבוס הגיע', W / 2 + 120, 250);
     ctx.font = "500 26px Rubik, sans-serif"; ctx.fillStyle = '#eef0ff';
-    ctx.fillText('ירו בטיל ה־RPG שלו 5 פעמים לפני שהוא מגיע אליכם', W / 2 + 120, 270);
+    ctx.fillText('ירו בטיל ה־RPG שלו 5 פעמים לפני שהוא מגיע אליכם', W / 2 + 120, 310);
     ctx.direction = 'ltr'; ctx.globalAlpha = 1;
   }
   if (G.mode === 'play' && !overShop(G.mx, G.my)) {
