@@ -104,7 +104,7 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
 .item.cur{border-color:var(--gold)}
 .item canvas{width:100%;height:auto;aspect-ratio:3/1;max-width:100%;display:block}
 .item h3{margin:0;font-family:var(--display);font-weight:400;font-size:1.15em}
-.item .meta{display:flex;gap:.8em;color:var(--muted);font-size:.82em;font-variant-numeric:tabular-nums}
+.item .meta{display:flex;flex-wrap:wrap;gap:.3em .8em;color:var(--muted);font-size:.82em;font-variant-numeric:tabular-nums}
 .item .meta b{color:var(--ink)}
 .item .btn{padding:.5em .8em;font-size:.9em;margin-top:auto}
 .item .btn[disabled]{background:#2a2e48;color:var(--muted);cursor:not-allowed}
@@ -162,7 +162,7 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
         <h2>חנות הגג</h2>
         <div class="pill coins"><span class="coin"></span><b id="shopCoins">0</b><span>מטבעות</span></div>
       </div>
-      <p>טיל שקונים נשאר שלכם עד סוף המשחק. כל טיל חזק יותר עולה 10 מטבעות יותר.</p>
+      <p>טיל שקונים נשאר שלכם עד סוף המשחק. כל טיל חזק יותר עולה 20 מטבעות יותר, יורה מהר יותר וטס מהר יותר.</p>
       <div class="shop-grid" id="shopGrid"></div>
       <div class="row"><button class="btn primary" id="shopClose" type="button">חזרה למשחק</button></div>
     </div>
@@ -184,26 +184,40 @@ const CFG = {
   baseHp: 100,   hpStep: 50,       // stage 1: 100 HP, +50 each stage
   baseDmg: 50,   dmgStep: 50,      // stage 1: 50 per hit, stage 2: 100, ...
   coinPerKill: 1,
-  fireCooldown: 0.3,
+  bossCoins: 10,
   attackEvery: 1.2,
+  flyFrom: 5,          // flying zombies join from this stage
+  throwerFrom: 10,     // head-throwing zombies join from this stage
+  bossFrom: 15,        // one RPG boss per stage from this stage
+  bossRocketHits: 5,   // player missiles needed to destroy a boss rocket
 };
 const levelStats = n => ({
   count: CFG.baseCount + CFG.countStep * (n - 1),
   hp: CFG.baseHp + CFG.hpStep * (n - 1),
   dmg: CFG.baseDmg + CFG.dmgStep * (n - 1),
-  scale: Math.min(0.8 + 0.2 * (n - 1), 2.4),
+  scale: Math.min(0.8 + 0.15 * (n - 1), 2.0),
   interval: Math.max(0.45, 1.7 - 0.12 * (n - 1)),
   speed: 1 + 0.05 * (n - 1),
+  fly: n >= CFG.flyFrom ? Math.min(0.15 + 0.03 * (n - CFG.flyFrom), 0.35) : 0,
+  thrower: n >= CFG.throwerFrom ? Math.min(0.15 + 0.02 * (n - CFG.throwerFrom), 0.3) : 0,
+  boss: n >= CFG.bossFrom ? 1 : 0,
 });
+const threatNote = n =>
+  n === CFG.flyFrom ? 'חדש: זומבים מעופפים' :
+  n === CFG.throwerFrom ? 'חדש: זומבי שזורק את הראש. ירו בראש בזמן שהוא עף' :
+  n === CFG.bossFrom ? 'חדש: בוס עם RPG. 5 פגיעות משמידות את הטיל שלו' : '';
 
+// cd = seconds between shots, speed = missile flight speed. Better missiles fire faster and fly faster.
 const MISSILES = [
-  { name: 'טיל רגיל',    dmg: 50,  price: 0,  color: '#ffd27a', glow: '#ff9b3d', splash: 30 },
-  { name: 'טיל אש',      dmg: 75,  price: 10, color: '#ff6a2b', glow: '#ff3b1f', splash: 38 },
-  { name: 'טיל קרח',     dmg: 100, price: 20, color: '#8fe0ff', glow: '#3fb6ff', splash: 42, slow: true },
-  { name: 'טיל ברק',     dmg: 150, price: 30, color: '#f6f26b', glow: '#fff7a8', splash: 46 },
-  { name: 'טיל פלזמה',   dmg: 200, price: 40, color: '#c98bff', glow: '#9a4dff', splash: 58 },
-  { name: 'טיל גרעיני',  dmg: 300, price: 50, color: '#7dff9a', glow: '#2fff6a', splash: 85 },
+  { name: 'טיל רגיל',    dmg: 50,  price: 0,   cd: 0.85, speed: 720,  color: '#ffd27a', glow: '#ff9b3d', splash: 30 },
+  { name: 'טיל אש',      dmg: 75,  price: 20,  cd: 0.72, speed: 800,  color: '#ff6a2b', glow: '#ff3b1f', splash: 38 },
+  { name: 'טיל קרח',     dmg: 100, price: 40,  cd: 0.6,  speed: 870,  color: '#8fe0ff', glow: '#3fb6ff', splash: 42, slow: true },
+  { name: 'טיל ברק',     dmg: 150, price: 60,  cd: 0.5,  speed: 940,  color: '#f6f26b', glow: '#fff7a8', splash: 46 },
+  { name: 'טיל פלזמה',   dmg: 200, price: 80,  cd: 0.4,  speed: 1020, color: '#c98bff', glow: '#9a4dff', splash: 58 },
+  { name: 'טיל גרעיני',  dmg: 300, price: 100, cd: 0.32, speed: 1100, color: '#7dff9a', glow: '#2fff6a', splash: 85 },
 ];
+const rate = m => (1 / m.cd).toFixed(1);
+const FLYERS = [ { key: 'wing', sp: 1.1 }, { key: 'balloon', sp: 0.65 }, { key: 'jet', sp: 1.5 } ];
 
 // Different zombie looks. wf = body width, sp = speed factor.
 const ZTYPES = [
@@ -237,8 +251,8 @@ window.addEventListener('resize', fit);
 const G = {
   mode: 'menu', level: 1, coins: 0, owned: new Set([0]), sel: 0, kills: 0,
   spawned: 0, toSpawn: 0, spawnT: 0, endT: 0,
-  zombies: [], missiles: [], parts: [], texts: [],
-  shake: 0, cool: 0, time: 0, banner: 0, firing: false,
+  zombies: [], missiles: [], parts: [], texts: [], heads: [], rockets: [],
+  shake: 0, cool: 0, time: 0, banner: 0, bossBanner: 0, bossAt: -1, firing: false,
   mx: 900, my: 400, shopReturn: 'play',
 };
 const P = { x: 200, y: ROOF, hp: CFG.playerHp, hurt: 0, aim: 0.25, recoil: 0 };
@@ -273,6 +287,11 @@ const sfx = {
   hurt: () => tone(160, 0.35, 0.18, 'sawtooth', 60),
   buy: () => { tone(660, 0.1, 0.07, 'triangle'); setTimeout(() => tone(990, 0.16, 0.07, 'triangle'), 90); },
   clear: () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.2, 0.06, 'triangle'), i * 110)),
+  toss: () => tone(260, 0.25, 0.08, 'sine', 620),
+  pop: () => { noise(0.15, 900, 0.25); tone(500, 0.12, 0.05, 'triangle', 200); },
+  rpg: () => { noise(0.45, 700, 0.4, 'bandpass'); tone(110, 0.4, 0.12, 'sawtooth', 50); },
+  clang: () => tone(880, 0.12, 0.07, 'square', 600),
+  roar: () => { tone(90, 0.9, 0.2, 'sawtooth', 45); noise(0.8, 300, 0.25); },
 };
 
 // ---------- helpers ----------
@@ -293,9 +312,11 @@ function limb(x, y, a, len, w, col, hand) {
   if (hand) { ctx.fillStyle = hand; circ(0, len, w * 0.62); ctx.fill(); }
   ctx.restore();
 }
+const zwf = z => z.boss ? 1.6 : ZTYPES[z.type].wf;
 function hitbox(z) {
-  const t = ZTYPES[z.type], s = z.s;
-  return { x1: z.x - 26 * s, x2: z.x + 14 * s * t.wf, y1: z.y - 76 * s, y2: z.y };
+  const s = z.s;
+  if (z.boss) return { x1: z.x - 30 * s, x2: z.x + 22 * s, y1: z.y - 96 * s, y2: z.y };
+  return { x1: z.x - 26 * s, x2: z.x + 14 * s * zwf(z), y1: z.y - (z.headless ? 58 : 76) * s, y2: z.y };
 }
 
 // ---------- background (pre-rendered once) ----------
@@ -374,10 +395,11 @@ const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
 // ---------- game flow ----------
 function startLevel(n) {
   const st = levelStats(n);
-  G.level = n; G.toSpawn = st.count; G.spawned = 0; G.spawnT = 1.4; G.endT = 0;
-  G.zombies.length = 0; G.missiles.length = 0;
+  G.level = n; G.toSpawn = st.count + st.boss; G.spawned = 0; G.spawnT = 1.4; G.endT = 0;
+  G.bossAt = st.boss ? Math.floor(st.count / 2) : -1;
+  G.zombies.length = 0; G.missiles.length = 0; G.heads.length = 0; G.rockets.length = 0;
   P.hp = CFG.playerHp; P.hurt = 0;
-  G.banner = 2.2; G.mode = 'play';
+  G.banner = threatNote(n) ? 3.2 : 2.2; G.bossBanner = 0; G.mode = 'play';
   hideAll(); renderAmmo();
 }
 function newGame() {
@@ -386,21 +408,73 @@ function newGame() {
 }
 function spawnZombie() {
   const st = levelStats(G.level), type = Math.floor(Math.random() * ZTYPES.length), t = ZTYPES[type];
-  G.zombies.push({
+  const z = {
     x: W + rand(30, 90), y: GROUND, s: st.scale * rand(0.92, 1.08), type,
     hp: st.hp, max: st.hp, dmg: st.dmg,
     speed: rand(44, 56) * t.sp * st.speed,
-    state: 'walk', anim: rand(0, 10), atkT: 0, slowT: 0, flash: 0, lunge: 0,
-  });
+    state: 'walk', anim: rand(0, 10), atkT: 0, slowT: 0, flash: 0, lunge: 0, throwAnim: 0,
+  };
+  const r = Math.random();
+  if (r < st.fly) {
+    const f = FLYERS[Math.floor(Math.random() * FLYERS.length)];
+    z.fly = f.key; z.state = 'fly'; z.s *= 0.85; z.baseY = z.y = rand(170, 470);
+    z.speed = rand(44, 56) * f.sp * st.speed;
+  } else if (r < st.fly + st.thrower) {
+    z.thrower = true; z.throwX = rand(640, 1000);
+  }
+  G.zombies.push(z);
   G.spawned++;
+}
+function spawnBoss() {
+  const st = levelStats(G.level);
+  G.zombies.push({
+    boss: true, x: W + 90, y: GROUND, s: st.scale * 2, type: 0,
+    hp: st.hp * 2, max: st.hp * 2, dmg: st.dmg * 2, speed: 26 * st.speed,
+    state: 'walk', anim: 0, atkT: 0, slowT: 0, flash: 0, lunge: 0,
+    fireT: 3, pauseT: 0, reload: 9, aim: Math.PI,
+  });
+  G.spawned++; G.bossBanner = 2.6; G.shake = 12; sfx.roar();
+}
+function throwHead(z) {
+  z.headless = true; z.throwAnim = 0.5;
+  const s = z.s, hx = z.x - 5 * s, hy = z.y - 66 * s;
+  const tx = P.x, ty = ROOF - 66, d = Math.hypot(tx - hx, ty - hy), sp = 230;
+  G.heads.push({ x: hx, y: hy, vx: (tx - hx) / d * sp, vy: (ty - hy) / d * sp, r: 11 * s, s, skin: ZTYPES[z.type].skin, spin: 0, dmg: z.dmg });
+  sfx.toss();
+}
+function popHead(h) {
+  if (h.dead) return;
+  h.dead = true; sfx.pop();
+  for (let i = 0; i < 16; i++) G.parts.push({ x: h.x, y: h.y, vx: rand(-200, 200), vy: rand(-260, 40), life: rand(0.5, 0.9), max: 0.9, size: rand(3, 6) * h.s, color: i % 2 ? '#5f9a2c' : h.skin, g: 900 });
+}
+function fireRocket(z, px, py) {
+  const a = z.aim, sp = 140, s = z.s;
+  const x = px + Math.cos(a) * 40 * s, y = py + Math.sin(a) * 40 * s;
+  G.rockets.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, hits: CFG.bossRocketHits, flash: 0 });
+  sfx.rpg(); G.shake = Math.max(G.shake, 6);
+  for (let i = 0; i < 10; i++) G.parts.push({ x, y, vx: rand(-60, 60), vy: rand(-60, 20), life: 0.8, max: 0.8, size: rand(8, 14), color: 'rgba(170,165,180,.5)', smoke: true });
+}
+function bigBoom(x, y, col) {
+  sfx.boom(true); G.shake = Math.max(G.shake, 18);
+  G.parts.push({ x, y, ring: true, life: 0.5, max: 0.5, size: 90, color: col });
+  for (let i = 0; i < 40; i++) { const a = rand(0, Math.PI * 2), v = rand(100, 420); G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rand(0.4, 0.9), max: 0.9, size: rand(3, 7), color: i % 2 ? col : '#fff3c4', g: 300 }); }
+  for (let i = 0; i < 10; i++) G.parts.push({ x: x + rand(-20, 20), y: y + rand(-20, 20), vx: rand(-40, 40), vy: rand(-70, -20), life: rand(0.8, 1.3), max: 1.3, size: rand(18, 30), color: 'rgba(60,55,70,.6)', smoke: true });
+}
+function hitRocket(r, m) {
+  explode(m.x, m.y, m, null);
+  r.hits--; r.flash = 0.12; sfx.clang();
+  if (r.hits <= 0) {
+    r.dead = true; bigBoom(r.x, r.y, '#ff7a2b');
+    G.texts.push({ x: r.x, y: r.y - 40, txt: 'הטיל הושמד', color: '#8fd14f', life: 1.3, max: 1.3, size: 30, rtl: true });
+  }
 }
 function hurtPlayer(d) {
   P.hp = Math.max(0, P.hp - d); P.hurt = 0.35; G.shake = 14; sfx.hurt();
   G.texts.push({ x: P.x, y: ROOF - 100, txt: '-' + d, color: '#ff5a4a', life: 1, max: 1, size: 34 });
   if (P.hp <= 0) gameOver();
 }
-function gameOver() {
-  G.mode = 'over'; G.firing = false;
+function gameOver(byRocket) {
+  G.mode = 'over'; G.firing = false; G.byRocket = !!byRocket;
   for (let i = 0; i < 40; i++) G.parts.push({ x: P.x, y: ROOF - 40, vx: rand(-200, 200), vy: rand(-300, -50), life: 1.2, max: 1.2, size: rand(3, 7), color: '#c9372d', g: 600 });
   setTimeout(() => showMsg('over'), 900);
 }
@@ -408,24 +482,27 @@ function levelCleared() {
   G.mode = 'between'; G.firing = false; sfx.clear(); showMsg('clear');
 }
 function fire() {
-  const m = MISSILES[G.sel], a = P.aim, sp = 980;
+  const m = MISSILES[G.sel], a = P.aim, sp = m.speed;
   const x = P.x + Math.cos(a) * 40, y = PIVOT_Y + Math.sin(a) * 40;
-  G.missiles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: G.sel, life: 2.5 });
-  G.cool = CFG.fireCooldown; P.recoil = 1; sfx.launch();
+  G.missiles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: G.sel, life: 3 });
+  G.cool = m.cd; P.recoil = 1; sfx.launch();
   for (let i = 0; i < 6; i++) G.parts.push({ x: P.x - Math.cos(a) * 18, y: PIVOT_Y - Math.sin(a) * 18, vx: -Math.cos(a) * rand(60, 140) + rand(-30, 30), vy: -Math.sin(a) * rand(60, 140) + rand(-30, 30), life: 0.5, max: 0.5, size: rand(5, 9), color: 'rgba(200,200,210,.5)', smoke: true });
 }
 function damageZombie(z, d, m) {
   if (z.hp <= 0) return;
   z.hp -= d; z.flash = 0.12;
   if (m.slow) z.slowT = 2.5;
-  G.texts.push({ x: z.x + rand(-8, 8), y: z.y - 80 * z.s, txt: String(d), color: m.color, life: 0.8, max: 0.8, size: 22 });
+  G.texts.push({ x: z.x + rand(-8, 8), y: hitbox(z).y1 - 4, txt: String(d), color: m.color, life: 0.8, max: 0.8, size: 22 });
   if (z.hp <= 0) killZombie(z);
 }
 function killZombie(z) {
-  G.coins += CFG.coinPerKill; G.kills++; sfx.coin();
-  const cy = z.y - 40 * z.s, t = ZTYPES[z.type];
-  for (let i = 0; i < 22; i++) G.parts.push({ x: z.x, y: cy, vx: rand(-220, 220), vy: rand(-340, -40), life: rand(0.6, 1.1), max: 1.1, size: rand(3, 7) * z.s, color: i % 3 ? '#5f9a2c' : t.skin, g: 900 });
-  G.texts.push({ x: z.x, y: cy - 40 * z.s, txt: '+' + CFG.coinPerKill, color: '#ffc94a', life: 1.1, max: 1.1, size: 28, coin: true });
+  const coins = z.boss ? CFG.bossCoins : CFG.coinPerKill;
+  G.coins += coins; G.kills++; sfx.coin();
+  const cy = z.y - 40 * z.s, skin = z.boss ? '#76688a' : ZTYPES[z.type].skin;
+  const n = z.boss ? 60 : 22;
+  for (let i = 0; i < n; i++) G.parts.push({ x: z.x + rand(-10, 10) * z.s, y: cy + rand(-20, 20) * z.s, vx: rand(-220, 220), vy: rand(-340, -40), life: rand(0.6, 1.1), max: 1.1, size: rand(3, 7) * Math.min(z.s, 2.5), color: i % 3 ? '#5f9a2c' : skin, g: 900 });
+  if (z.boss) bigBoom(z.x, cy, '#c98bff');
+  G.texts.push({ x: z.x, y: cy - 40 * z.s, txt: '+' + coins, color: '#ffc94a', life: 1.1, max: 1.1, size: z.boss ? 40 : 28, coin: true });
 }
 function explode(mx, my, m, direct) {
   const M = MISSILES[m.t];
@@ -444,6 +521,7 @@ function explode(mx, my, m, direct) {
     const dx = Math.max(h.x1 - mx, 0, mx - h.x2), dy = Math.max(h.y1 - my, 0, my - h.y2);
     if (dx * dx + dy * dy <= M.splash * M.splash) damageZombie(z, Math.round(M.dmg / 2), M);
   }
+  for (const h of G.heads) if (Math.hypot(h.x - mx, h.y - my) <= M.splash + h.r) popHead(h);
 }
 
 // ---------- update ----------
@@ -458,39 +536,87 @@ function update(dt) {
   if (G.mode !== 'play') return;
 
   G.banner = Math.max(0, G.banner - dt);
+  G.bossBanner = Math.max(0, G.bossBanner - dt);
   G.cool -= dt;
   if (G.firing && G.cool <= 0) fire();
 
   const st = levelStats(G.level);
   if (G.spawned < G.toSpawn) {
     G.spawnT -= dt;
-    if (G.spawnT <= 0) { spawnZombie(); G.spawnT = st.interval * rand(0.6, 1.4); }
+    if (G.spawnT <= 0) {
+      if (G.spawned === G.bossAt) { spawnBoss(); G.bossAt = -1; } else spawnZombie();
+      G.spawnT = st.interval * rand(0.6, 1.4);
+    }
   }
 
   for (const z of G.zombies) {
-    const t = ZTYPES[z.type];
+    const wf = zwf(z);
     z.flash = Math.max(0, z.flash - dt); z.slowT = Math.max(0, z.slowT - dt); z.lunge = Math.max(0, z.lunge - dt * 4);
-    const sp = z.speed * (z.slowT > 0 ? 0.5 : 1);
+    z.throwAnim = Math.max(0, (z.throwAnim || 0) - dt);
+    let sp = z.speed * (z.slowT > 0 ? 0.5 : 1);
+    if (z.boss) {
+      z.reload += dt;
+      const px = z.x - 2 * z.s, py = z.y - 62 * z.s;
+      z.aim = Math.atan2(ROOF - 45 - py, P.x - px);
+      if (z.pauseT > 0) { z.pauseT -= dt; sp = 0; }
+      if (z.state === 'walk' && z.x < W - 60) {
+        z.fireT -= dt;
+        if (z.fireT <= 0) { fireRocket(z, px, py); z.fireT = 8; z.pauseT = 1; z.reload = 0; }
+      }
+    }
     if (z.state === 'walk') {
       z.x -= sp * dt; z.anim += dt * sp * 0.11;
-      if (z.x <= WALL + 13 * z.s * t.wf) { z.x = WALL + 13 * z.s * t.wf; z.state = 'climb'; }
+      if (z.thrower && !z.headless && z.x <= z.throwX) throwHead(z);
+      if (z.x <= WALL + 13 * z.s * wf) { z.x = WALL + 13 * z.s * wf; z.state = 'climb'; }
     } else if (z.state === 'climb') {
       z.y -= sp * 0.75 * dt; z.anim += dt * sp * 0.13;
       if (z.y <= ROOF) { z.y = ROOF; z.x = WALL - 6; z.state = 'roof'; }
     } else if (z.state === 'roof') {
       z.x -= sp * dt; z.anim += dt * sp * 0.11;
-      if (z.x <= P.x + 30 + 14 * z.s * t.wf) { z.state = 'attack'; z.atkT = 0.45; }
+      if (z.x <= P.x + 30 + 14 * z.s * wf) { z.state = 'attack'; z.atkT = 0.45; }
+    } else if (z.state === 'fly') {
+      const tx = P.x + 34 + 14 * z.s * wf, ty = ROOF - 16;
+      const dx = tx - z.x, dy = ty - z.baseY, d = Math.hypot(dx, dy);
+      z.anim += dt * 3;
+      if (d <= sp * dt + 2) { z.x = tx; z.baseY = ty; z.state = 'attack'; z.atkT = 0.45; }
+      else { z.x += dx / d * sp * dt; z.baseY += dy / d * sp * dt; }
+      z.y = z.baseY + Math.sin(z.anim * 1.3) * 10;
     } else if (z.state === 'attack') {
       z.anim += dt * 3; z.atkT -= dt;
+      if (z.fly) z.y = z.baseY + Math.sin(z.anim * 1.3) * 6;
       if (z.atkT <= 0) { z.lunge = 1; z.atkT = CFG.attackEvery; hurtPlayer(z.dmg); if (G.mode !== 'play') return; }
     }
+  }
+
+  for (const h of G.heads) {
+    h.x += h.vx * dt; h.y += h.vy * dt; h.spin += dt * 9;
+    if (Math.random() < 0.4) G.parts.push({ x: h.x, y: h.y + h.r * 0.6, vx: rand(-20, 20), vy: rand(0, 40), life: 0.5, max: 0.5, size: rand(2, 4), color: '#5f9a2c', g: 500 });
+    if (Math.hypot(h.x - P.x, h.y - (ROOF - 50)) < h.r + 18) { popHead(h); hurtPlayer(h.dmg); if (G.mode !== 'play') return; }
+    if (h.x < -60 || h.y > H + 60 || h.y < -80) h.dead = true;
+  }
+
+  for (const r of G.rockets) {
+    r.x += r.vx * dt; r.y += r.vy * dt; r.flash = Math.max(0, r.flash - dt);
+    if (Math.random() < 0.9) G.parts.push({ x: r.x - r.vx * 0.15, y: r.y - r.vy * 0.15, vx: rand(-15, 15), vy: rand(-25, 0), life: 0.7, max: 0.7, size: rand(5, 9), color: 'rgba(170,165,180,.4)', smoke: true });
+    if (Math.hypot(r.x - P.x, r.y - (ROOF - 45)) < 30) {
+      r.dead = true; bigBoom(P.x, ROOF - 45, '#ff7a2b');
+      P.hp = 0; P.hurt = 0.5; G.shake = 26;
+      G.texts.push({ x: P.x + 60, y: ROOF - 120, txt: 'פגיעה ישירה', color: '#ff5a4a', life: 1.4, max: 1.4, size: 34, rtl: true });
+      gameOver(true); return;
+    }
+    if (r.x < -80 || r.x > W + 80 || r.y < -80 || r.y > H + 80) r.dead = true;
   }
 
   for (const m of G.missiles) {
     m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt;
     if (Math.random() < 0.8) G.parts.push({ x: m.x - m.vx * 0.012, y: m.y - m.vy * 0.012, vx: rand(-15, 15), vy: rand(-25, 0), life: 0.45, max: 0.45, size: rand(3, 6), color: 'rgba(190,190,205,.35)', smoke: true });
+    const rocket = G.rockets.find(r => !r.dead && Math.hypot(m.x - r.x, m.y - r.y) < 26);
+    if (rocket) { hitRocket(rocket, m); m.dead = true; continue; }
+    const head = G.heads.find(h => !h.dead && Math.hypot(m.x - h.x, m.y - h.y) < h.r + 6);
+    if (head) { popHead(head); explode(m.x, m.y, m, null); m.dead = true; continue; }
     let hit = null;
     for (const z of G.zombies) {
+      if (z.hp <= 0) continue;
       const h = hitbox(z);
       if (m.x >= h.x1 - 4 && m.x <= h.x2 + 4 && m.y >= h.y1 - 4 && m.y <= h.y2) { hit = z; break; }
     }
@@ -500,8 +626,10 @@ function update(dt) {
   }
   G.missiles = G.missiles.filter(m => !m.dead);
   G.zombies = G.zombies.filter(z => z.hp > 0);
+  G.heads = G.heads.filter(h => !h.dead);
+  G.rockets = G.rockets.filter(r => !r.dead);
 
-  if (G.spawned >= G.toSpawn && G.zombies.length === 0) {
+  if (G.spawned >= G.toSpawn && !G.zombies.length && !G.heads.length && !G.rockets.length) {
     G.endT += dt;
     if (G.endT > 0.9) levelCleared();
   }
@@ -509,25 +637,69 @@ function update(dt) {
 
 // ---------- drawing ----------
 function drawZombie(z) {
-  const T = ZTYPES[z.type], s = z.s, wf = T.wf, climb = z.state === 'climb';
+  if (z.boss) drawBoss(z); else drawZBody(z);
+  const hb = hitbox(z), bw = z.boss ? 120 : 44, bx = (hb.x1 + hb.x2) / 2 - bw / 2, by = hb.y1 - 12;
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx - 1, by - 1, bw + 2, z.boss ? 8 : 6);
+  ctx.fillStyle = z.hp / z.max > 0.5 ? '#8fd14f' : z.hp / z.max > 0.25 ? '#ffc94a' : '#e0483c';
+  ctx.fillRect(bx, by, bw * Math.max(0, z.hp / z.max), z.boss ? 6 : 4);
+}
+
+// wings, balloons or a jetpack, drawn behind the body (local, unscaled units)
+function flyGear(z) {
+  const a = z.anim;
+  if (z.fly === 'wing') {
+    const flap = Math.sin(a * 9);
+    for (const side of [1, 0]) {
+      ctx.save(); ctx.translate(4, -52); ctx.rotate(-0.25 + flap * 0.55 + side * 0.35);
+      ctx.fillStyle = side ? '#3b2d44' : '#271d30';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(16, -28); ctx.lineTo(42, -22); ctx.lineTo(36, -9); ctx.lineTo(28, -12);
+      ctx.lineTo(24, -1); ctx.lineTo(14, -5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#7a6686'; ctx.lineWidth = 1.5; ctx.beginPath();
+      ctx.moveTo(0, 0); ctx.lineTo(16, -28); ctx.lineTo(42, -22); ctx.moveTo(16, -28); ctx.lineTo(28, -12); ctx.moveTo(16, -28); ctx.lineTo(14, -5); ctx.stroke();
+      ctx.restore();
+    }
+  } else if (z.fly === 'balloon') {
+    const cols = ['#e0483c', '#ffc94a', '#9a6bff'], pts = [[-16, -118], [2, -130], [18, -116]];
+    ctx.strokeStyle = 'rgba(230,230,240,.7)'; ctx.lineWidth = 0.8;
+    pts.forEach(([x, y], i) => { const o = Math.sin(a * 1.5 + i) * 3; ctx.beginPath(); ctx.moveTo(-2, -55); ctx.lineTo(x + o, y + 12); ctx.stroke(); });
+    pts.forEach(([x, y], i) => {
+      const o = Math.sin(a * 1.5 + i) * 3;
+      ctx.fillStyle = cols[i]; ctx.beginPath(); ctx.ellipse(x + o, y, 10, 12, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; circ(x + o - 3, y - 4, 3); ctx.fill();
+    });
+  } else if (z.fly === 'jet') {
+    ctx.fillStyle = '#6f7480'; rr(9, -58, 11, 27, 3); ctx.fill();
+    ctx.fillStyle = '#4a4e58'; rr(11, -62, 7, 6, 2); ctx.fill(); ctx.fillRect(10, -33, 9, 3);
+    const fl = 14 + Math.random() * 10;
+    ctx.fillStyle = '#ff9b3d'; ctx.beginPath(); ctx.moveTo(10, -30); ctx.lineTo(18, -30 + fl); ctx.lineTo(19, -30); ctx.fill();
+    ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.moveTo(12, -30); ctx.lineTo(16, -30 + fl * 0.5); ctx.lineTo(17, -30); ctx.fill();
+  }
+}
+
+function drawZBody(z) {
+  const T = ZTYPES[z.type], s = z.s, wf = T.wf, climb = z.state === 'climb', fly = !!z.fly;
   const sw = Math.sin(z.anim * 6);
   let skin = T.skin;
   if (z.slowT > 0) skin = '#9fd4e8';
   if (z.flash > 0) skin = '#ffffff';
   const dark = shade(skin === '#ffffff' ? T.skin : skin, -0.28);
   ctx.save(); ctx.translate(z.x - z.lunge * 10 * s, z.y); ctx.scale(s, s);
-  if (!climb) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, 16 * wf, 3.5, 0, 0, 7); ctx.fill(); }
-  const bob = climb ? 0 : Math.abs(sw) * -2;
+  if (!climb && !fly) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, 16 * wf, 3.5, 0, 0, 7); ctx.fill(); }
+  const bob = climb || fly ? 0 : Math.abs(sw) * -2;
   ctx.translate(0, bob);
+  if (fly) flyGear(z);
   const armLen = T.key === 'ghoul' ? 29 : 24;
-  const armA = climb ? Math.PI - 0.35 + 0.45 * sw
+  let armA = climb ? Math.PI - 0.35 + 0.45 * sw
     : z.state === 'attack' ? 1.25 + 0.45 * Math.sin(z.anim * 2) : 1.45 + 0.12 * sw;
-  const armB = climb ? Math.PI + 0.35 - 0.45 * sw
+  let armB = climb ? Math.PI + 0.35 - 0.45 * sw
     : z.state === 'attack' ? 1.45 - 0.45 * Math.sin(z.anim * 2) : 1.55 - 0.12 * sw;
+  if (z.fly === 'balloon' && z.state !== 'attack') { armA = Math.PI - 0.1; armB = 1.5; }
+  if (z.throwAnim > 0) { armA = armB = 2.5 - z.throwAnim; }
   // back arm
   limb(0, -50, armA, armLen, 7, dark, dark);
   // legs
-  const lA = climb ? 0.55 + 0.45 * sw : 0.45 * sw, lB = climb ? 0.55 - 0.45 * sw : -0.45 * sw;
+  let lA = climb ? 0.55 + 0.45 * sw : 0.45 * sw, lB = climb ? 0.55 - 0.45 * sw : -0.45 * sw;
+  if (fly) { lA = 0.25 + 0.12 * sw; lB = 0.05 - 0.12 * sw; }
   limb(-2, -28, lA, 27, 9, shade(T.pants, -0.3), '#141218');
   limb(3, -28, lB, 27, 9, T.pants, '#1b1820');
   // torso
@@ -544,27 +716,121 @@ function drawZombie(z) {
   if (T.key === 'runner') { ctx.fillStyle = shade(T.shirt, -0.25); ctx.fillRect(-9 * wf, -40, 18 * wf, 3); }
   // head
   const hx = -5, hy = -66;
-  if (T.key === 'runner') { ctx.fillStyle = T.shirt; circ(hx + 2, hy, 13.5); ctx.fill(); }
-  ctx.fillStyle = skin; circ(hx, hy, 10.5); ctx.fill();
-  ctx.fillStyle = dark; rr(hx - 10, hy + 3, 11, 6, 2); ctx.fill();
-  ctx.fillStyle = '#e8e2c8'; ctx.fillRect(hx - 9, hy + 3, 2, 2); ctx.fillRect(hx - 5, hy + 3, 2, 2);
-  ctx.fillStyle = '#ff3b2f'; circ(hx - 7, hy - 2, 2.2); ctx.fill(); circ(hx - 1, hy - 2, 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,90,60,.35)'; circ(hx - 7, hy - 2, 4); ctx.fill();
-  if (T.key === 'classic') { ctx.fillStyle = '#2a2420'; ctx.beginPath(); ctx.arc(hx + 1, hy - 3, 10.5, Math.PI * 1.05, Math.PI * 2.05); ctx.fill(); }
-  if (T.key === 'runner') { ctx.fillStyle = T.shirt; ctx.beginPath(); ctx.arc(hx + 2, hy, 13.5, Math.PI * 1.1, Math.PI * 1.9); ctx.lineTo(hx + 4, hy + 4); ctx.fill(); }
-  if (T.key === 'worker') { ctx.fillStyle = '#f2c53a'; ctx.beginPath(); ctx.arc(hx, hy - 3, 11, Math.PI, 0); ctx.fill(); ctx.fillRect(hx - 15, hy - 4, 26, 3); }
-  if (T.key === 'fat') { ctx.strokeStyle = '#3b2a20'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(hx - 2, hy - 10); ctx.lineTo(hx + 6, hy - 4);
-    for (let i = 0; i < 4; i++) { ctx.moveTo(hx + i * 2 - 1, hy - 9 + i * 1.5 - 2); ctx.lineTo(hx + i * 2 + 1, hy - 9 + i * 1.5 + 2); } ctx.stroke(); }
-  if (T.key === 'ghoul') { ctx.strokeStyle = '#e9e9f2'; ctx.lineWidth = 1; ctx.beginPath();
-    for (let i = 0; i < 5; i++) { ctx.moveTo(hx + 2 + i * 2, hy - 9); ctx.lineTo(hx + 5 + i * 2.5, hy + 2 + (i % 2) * 3); } ctx.stroke(); }
+  if (z.headless) {
+    ctx.fillStyle = dark; rr(hx - 1, -62, 8, 7, 3); ctx.fill();
+    ctx.fillStyle = '#4f8a24'; ctx.beginPath(); ctx.ellipse(hx + 3, -62, 5, 2.5, 0, 0, 7); ctx.fill();
+    const drip = (G.time * 2 + z.anim) % 1;
+    ctx.fillStyle = '#5f9a2c'; circ(hx + 1, -60 + drip * 8, 1.6); ctx.fill();
+  } else {
+    if (T.key === 'runner') { ctx.fillStyle = T.shirt; circ(hx + 2, hy, 13.5); ctx.fill(); }
+    ctx.fillStyle = skin; circ(hx, hy, 10.5); ctx.fill();
+    ctx.fillStyle = dark; rr(hx - 10, hy + 3, 11, 6, 2); ctx.fill();
+    ctx.fillStyle = '#e8e2c8'; ctx.fillRect(hx - 9, hy + 3, 2, 2); ctx.fillRect(hx - 5, hy + 3, 2, 2);
+    ctx.fillStyle = '#ff3b2f'; circ(hx - 7, hy - 2, 2.2); ctx.fill(); circ(hx - 1, hy - 2, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,90,60,.35)'; circ(hx - 7, hy - 2, 4); ctx.fill();
+    if (T.key === 'classic') { ctx.fillStyle = '#2a2420'; ctx.beginPath(); ctx.arc(hx + 1, hy - 3, 10.5, Math.PI * 1.05, Math.PI * 2.05); ctx.fill(); }
+    if (T.key === 'runner') { ctx.fillStyle = T.shirt; ctx.beginPath(); ctx.arc(hx + 2, hy, 13.5, Math.PI * 1.1, Math.PI * 1.9); ctx.lineTo(hx + 4, hy + 4); ctx.fill(); }
+    if (T.key === 'worker') { ctx.fillStyle = '#f2c53a'; ctx.beginPath(); ctx.arc(hx, hy - 3, 11, Math.PI, 0); ctx.fill(); ctx.fillRect(hx - 15, hy - 4, 26, 3); }
+    if (T.key === 'fat') { ctx.strokeStyle = '#3b2a20'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(hx - 2, hy - 10); ctx.lineTo(hx + 6, hy - 4);
+      for (let i = 0; i < 4; i++) { ctx.moveTo(hx + i * 2 - 1, hy - 9 + i * 1.5 - 2); ctx.lineTo(hx + i * 2 + 1, hy - 9 + i * 1.5 + 2); } ctx.stroke(); }
+    if (T.key === 'ghoul') { ctx.strokeStyle = '#e9e9f2'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let i = 0; i < 5; i++) { ctx.moveTo(hx + 2 + i * 2, hy - 9); ctx.lineTo(hx + 5 + i * 2.5, hy + 2 + (i % 2) * 3); } ctx.stroke(); }
+    if (z.fly === 'jet') { ctx.fillStyle = '#2b2b33'; ctx.fillRect(hx - 11, hy - 6, 21, 4); ctx.fillStyle = '#8fe0ff'; circ(hx - 7, hy - 4, 2.8); ctx.fill(); }
+    if (z.thrower) {
+      // loose head held on by stitches
+      ctx.strokeStyle = '#1d1a14'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(hx - 7, hy + 9); ctx.lineTo(hx + 8, hy + 8);
+      for (let i = 0; i < 4; i++) { ctx.moveTo(hx - 5 + i * 4, hy + 6.5); ctx.lineTo(hx - 4 + i * 4, hy + 11); }
+      ctx.stroke();
+    }
+  }
   // front arm
   limb(-4 * wf, -50, armB, armLen, 7.5, skin, skin);
   ctx.restore();
-  // health bar
-  const bw = 44, bx = z.x - bw / 2 - 4, by = z.y - 84 * s - 6;
-  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
-  ctx.fillStyle = z.hp / z.max > 0.5 ? '#8fd14f' : z.hp / z.max > 0.25 ? '#ffc94a' : '#e0483c';
-  ctx.fillRect(bx, by, bw * Math.max(0, z.hp / z.max), 4);
+}
+
+function drawBoss(z) {
+  const s = z.s, sw = Math.sin(z.anim * 6), climb = z.state === 'climb';
+  let skin = '#76688a';
+  if (z.slowT > 0) skin = '#9fb8e8';
+  if (z.flash > 0) skin = '#ffffff';
+  const dark = '#4a3f5a';
+  ctx.save(); ctx.translate(z.x - z.lunge * 10 * s, z.y); ctx.scale(s, s);
+  if (!climb) { ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(0, 0, 26, 5, 0, 0, 7); ctx.fill(); }
+  ctx.translate(0, climb ? 0 : Math.abs(sw) * -1.5);
+  // bone spikes on the back
+  ctx.fillStyle = '#e6dcc0';
+  for (let i = 0; i < 4; i++) { const y = -76 + i * 11; ctx.beginPath(); ctx.moveTo(14, y); ctx.lineTo(28, y - 10); ctx.lineTo(16, y + 7); ctx.fill(); }
+  // back arm
+  limb(6, -62, climb ? Math.PI - 0.3 + 0.4 * sw : 1.0 + 0.1 * sw, 30, 12, dark, dark);
+  // legs
+  const lA = climb ? 0.55 + 0.45 * sw : 0.4 * sw;
+  limb(-5, -34, lA, 32, 14, '#232619', '#0f0f12');
+  limb(6, -34, climb ? 0.55 - 0.45 * sw : -lA, 32, 14, '#30362a', '#141418');
+  // torso, vest, ammo belt
+  ctx.fillStyle = skin; rr(-19, -70, 38, 40, 10); ctx.fill();
+  ctx.fillStyle = '#3b3428'; rr(-19, -64, 38, 28, 6); ctx.fill();
+  ctx.fillStyle = '#2a251c'; ctx.fillRect(-6, -64, 4, 28); ctx.fillRect(6, -64, 4, 28);
+  ctx.save(); ctx.translate(-17, -66); ctx.rotate(0.62);
+  ctx.fillStyle = '#4a3a20'; ctx.fillRect(0, -2.5, 46, 5);
+  ctx.fillStyle = '#d9a43a'; for (let i = 0; i < 8; i++) ctx.fillRect(2 + i * 5.5, -4.5, 3, 4);
+  ctx.restore();
+  ctx.fillStyle = '#1e1b16'; ctx.fillRect(-19, -36, 38, 6);
+  ctx.fillStyle = '#8c919c'; ctx.fillRect(-3, -36, 7, 6);
+  // head with metal plate, big jaw and one glowing eye
+  const hx = -8, hy = -82;
+  ctx.fillStyle = skin; circ(hx, hy, 14); ctx.fill();
+  ctx.fillStyle = '#8c919c'; ctx.beginPath(); ctx.arc(hx + 3, hy - 2, 14.5, Math.PI * 1.15, Math.PI * 1.9); ctx.lineTo(hx + 3, hy - 2); ctx.fill();
+  ctx.fillStyle = '#c9ccd4'; for (let i = 0; i < 3; i++) { circ(hx - 2 + i * 6, hy - 12 + Math.abs(i - 1) * 2, 1.3); ctx.fill(); }
+  ctx.fillStyle = '#241a24'; rr(hx - 17, hy + 1, 18, 12, 3); ctx.fill();
+  ctx.fillStyle = '#eee6cc';
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(hx - 16 + i * 4, hy + 1); ctx.lineTo(hx - 14 + i * 4, hy + 6); ctx.lineTo(hx - 12 + i * 4, hy + 1); ctx.fill(); }
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(hx - 16 + i * 4, hy + 13); ctx.lineTo(hx - 14 + i * 4, hy + 8); ctx.lineTo(hx - 12 + i * 4, hy + 13); ctx.fill(); }
+  const pulse = 0.5 + 0.5 * Math.sin(G.time * 6);
+  ctx.fillStyle = `rgba(255,40,30,${0.25 + 0.25 * pulse})`; circ(hx - 9, hy - 4, 8); ctx.fill();
+  ctx.fillStyle = '#ff2b1f'; circ(hx - 9, hy - 4, 3.6); ctx.fill();
+  ctx.fillStyle = '#ffe0c0'; circ(hx - 9.5, hy - 4.5, 1.2); ctx.fill();
+  ctx.strokeStyle = '#2a1f2a'; ctx.lineWidth = 1.6; ctx.beginPath();
+  ctx.moveTo(hx - 3, hy - 8); ctx.lineTo(hx + 2, hy - 1); ctx.moveTo(hx + 2, hy - 8); ctx.lineTo(hx - 3, hy - 1); ctx.stroke();
+  ctx.restore();
+  // RPG on the shoulder, aimed at the player
+  ctx.save(); ctx.translate(z.x - 2 * s, z.y - 62 * s); ctx.rotate(z.aim); ctx.scale(s, s);
+  ctx.fillStyle = '#4b5332'; rr(-24, -5, 58, 10, 3); ctx.fill();
+  ctx.fillStyle = '#353b23'; ctx.fillRect(-24, -5, 6, 10); ctx.fillRect(4, -5, 4, 10); ctx.fillRect(-4, 5, 5, 8);
+  if (z.reload > 1.5) {
+    ctx.fillStyle = '#5c6a3c'; ctx.fillRect(34, -4, 6, 8);
+    ctx.fillStyle = '#b33a2a'; ctx.beginPath(); ctx.moveTo(40, -6); ctx.lineTo(52, 0); ctx.lineTo(40, 6); ctx.fill();
+  }
+  ctx.fillStyle = skin; circ(2, 7, 5.5); ctx.fill(); circ(18, 6, 5.5); ctx.fill();
+  ctx.restore();
+}
+
+function drawHead(h) {
+  ctx.save(); ctx.translate(h.x, h.y); ctx.rotate(-h.spin); ctx.scale(h.s, h.s);
+  ctx.fillStyle = h.skin; circ(0, 0, 10.5); ctx.fill();
+  ctx.fillStyle = shade(h.skin, -0.3); rr(-10, 3, 11, 6, 2); ctx.fill();
+  ctx.fillStyle = '#ff3b2f'; circ(-7, -2, 2.4); ctx.fill(); circ(-1, -2, 2.1); ctx.fill();
+  ctx.fillStyle = '#4f8a24'; ctx.beginPath(); ctx.ellipse(3, 9, 6, 3, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#1d1a14'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-6, 8); ctx.lineTo(9, 7); ctx.stroke();
+  ctx.restore();
+}
+
+function drawRocket(r) {
+  ctx.save(); ctx.translate(r.x, r.y);
+  const pulse = 0.5 + 0.5 * Math.sin(G.time * 10);
+  ctx.strokeStyle = `rgba(255,60,40,${0.35 + 0.4 * pulse})`; ctx.lineWidth = 2; circ(0, 0, 28); ctx.stroke();
+  ctx.rotate(Math.atan2(r.vy, r.vx)); ctx.scale(1.7, 1.7);
+  const fl = 8 + Math.random() * 8;
+  ctx.fillStyle = '#ff9b3d'; ctx.beginPath(); ctx.moveTo(-14, -3); ctx.lineTo(-14 - fl, 0); ctx.lineTo(-14, 3); ctx.fill();
+  ctx.fillStyle = r.flash > 0 ? '#ffffff' : '#5c6a3c'; rr(-14, -4, 24, 8, 3); ctx.fill();
+  ctx.fillStyle = r.flash > 0 ? '#ffffff' : '#b33a2a'; ctx.beginPath(); ctx.moveTo(10, -5.5); ctx.lineTo(21, 0); ctx.lineTo(10, 5.5); ctx.fill();
+  ctx.fillStyle = '#353b23'; ctx.beginPath(); ctx.moveTo(-14, -4); ctx.lineTo(-19, -9); ctx.lineTo(-8, -4); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-14, 4); ctx.lineTo(-19, 9); ctx.lineTo(-8, 4); ctx.fill();
+  ctx.restore();
+  // hits left to destroy it
+  for (let i = 0; i < CFG.bossRocketHits; i++) {
+    ctx.fillStyle = i < r.hits ? '#ff5a4a' : 'rgba(255,255,255,.18)';
+    circ(r.x - (CFG.bossRocketHits - 1) * 6 + i * 12, r.y - 40, 4); ctx.fill();
+  }
 }
 
 function drawPlayer() {
@@ -648,7 +914,9 @@ function render() {
   drawShop();
   for (const z of G.zombies) if (z.state === 'walk' || z.state === 'climb') drawZombie(z);
   if (G.mode !== 'over' || P.hp > 0) drawPlayer();
-  for (const z of G.zombies) if (z.state === 'roof' || z.state === 'attack') drawZombie(z);
+  for (const z of G.zombies) if (z.state !== 'walk' && z.state !== 'climb') drawZombie(z);
+  for (const h of G.heads) drawHead(h);
+  for (const r of G.rockets) drawRocket(r);
   for (const m of G.missiles) drawMissile(m);
   for (const p of G.parts) {
     const a = Math.max(0, p.life / p.max);
@@ -666,8 +934,10 @@ function render() {
   for (const t of G.texts) {
     ctx.globalAlpha = Math.min(1, t.life / t.max * 2);
     ctx.font = `900 ${t.size}px Rubik, sans-serif`;
+    ctx.direction = t.rtl ? 'rtl' : 'ltr';
     ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(t.txt, t.x, t.y);
     ctx.fillStyle = t.color; ctx.fillText(t.txt, t.x, t.y);
+    ctx.direction = 'ltr';
     if (t.coin) { const w = ctx.measureText(t.txt).width; ctx.fillStyle = '#ffc94a'; circ(t.x + w / 2 + 12, t.y, 9); ctx.fill(); ctx.fillStyle = '#9a6a0c'; circ(t.x + w / 2 + 12, t.y, 4); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
@@ -687,6 +957,20 @@ function render() {
     const st = levelStats(G.level);
     ctx.font = "500 26px Rubik, sans-serif"; ctx.fillStyle = '#eef0ff';
     ctx.fillText(`${st.count} זומבים · ${st.hp} חיים לכל אחד · ${st.dmg} נזק לכל מכה`, W / 2 + 120, 262);
+    const note = threatNote(G.level);
+    if (note) {
+      ctx.font = "30px 'Secular One', Rubik, sans-serif"; ctx.lineWidth = 6; ctx.strokeStyle = '#2a1d00';
+      ctx.strokeText(note, W / 2 + 120, 316); ctx.fillStyle = '#ffc94a'; ctx.fillText(note, W / 2 + 120, 316);
+    }
+    ctx.direction = 'ltr'; ctx.globalAlpha = 1;
+  }
+  if (G.bossBanner > 0 && G.mode === 'play') {
+    ctx.globalAlpha = Math.min(1, G.bossBanner * 1.5); ctx.direction = 'rtl'; ctx.textAlign = 'center';
+    ctx.font = "96px 'Secular One', Rubik, sans-serif";
+    ctx.lineWidth = 10; ctx.strokeStyle = '#2a0808'; ctx.strokeText('הבוס הגיע', W / 2 + 120, 210);
+    ctx.fillStyle = '#ff4a3a'; ctx.fillText('הבוס הגיע', W / 2 + 120, 210);
+    ctx.font = "500 26px Rubik, sans-serif"; ctx.fillStyle = '#eef0ff';
+    ctx.fillText('ירו בטיל ה־RPG שלו 5 פעמים לפני שהוא מגיע אליכם', W / 2 + 120, 270);
     ctx.direction = 'ltr'; ctx.globalAlpha = 1;
   }
   if (G.mode === 'play' && !overShop(G.mx, G.my)) {
@@ -718,7 +1002,7 @@ function renderAmmo() {
     const own = G.owned.has(i);
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'ammo' + (i === G.sel ? ' sel' : '') + (own ? '' : ' locked');
-    b.innerHTML = `<span class="k">${i + 1}</span><span class="sw" style="background:${m.color}"></span><span>${m.name}<small>${own ? m.dmg + ' נזק' : m.price + ' מטבעות'}</small></span>`;
+    b.innerHTML = `<span class="k">${i + 1}</span><span class="sw" style="background:${m.color}"></span><span>${m.name}<small>${own ? m.dmg + ' נזק · ' + rate(m) + ' בשנייה' : m.price + ' מטבעות'}</small></span>`;
     b.addEventListener('click', () => { if (own) selectMissile(i); else openShop(); });
     bar.appendChild(b);
   });
@@ -735,7 +1019,8 @@ function showMsg(kind) {
   if (kind === 'clear' || kind === 'resume') {
     const next = kind === 'clear' ? G.level + 1 : G.level, st = levelStats(next);
     $('msgTitle').textContent = kind === 'clear' ? `שלב ${G.level} הושלם` : `ממשיכים משלב ${next}`;
-    $('msgText').textContent = `בשלב ${next} הזומבים גדולים יותר. החיים שלכם מתמלאים בתחילת כל שלב. יש לכם ${G.coins} מטבעות.`;
+    const note = threatNote(next);
+    $('msgText').textContent = (note ? note + '. ' : '') + `בשלב ${next} הזומבים גדולים יותר. החיים שלכם מתמלאים בתחילת כל שלב. יש לכם ${G.coins} מטבעות.`;
     $('msgStats').innerHTML = stat('זומבים', st.count) + stat('חיים לזומבי', st.hp) + stat('נזק לכל מכה', st.dmg);
     add(`התחילו את שלב ${next}`, 'primary', () => startLevel(next)).focus();
     add('פתחו את החנות', 'gold', openShop);
@@ -747,7 +1032,7 @@ function showMsg(kind) {
     add('פתחו את החנות', 'gold', openShop);
   } else {
     $('msgTitle').textContent = 'הזומבים השתלטו על הגג';
-    $('msgText').textContent = 'אפשר לנסות שוב מהשלב הראשון.';
+    $('msgText').textContent = (G.byRocket ? 'טיל ה־RPG של הבוס פגע בכם. ' : '') + 'אפשר לנסות שוב מהשלב הראשון.';
     $('msgStats').innerHTML = stat('הגעתם לשלב', G.level) + stat('זומבים שחוסלו', G.kills) + stat('מטבעות', G.coins);
     add('משחק חדש', 'primary', newGame).focus();
   }
@@ -763,7 +1048,7 @@ function renderShop() {
     MISSILES.forEach((m, i) => {
       const d = document.createElement('div'); d.className = 'item';
       d.innerHTML = `<canvas width="240" height="80"></canvas><h3>${m.name}</h3>
-        <div class="meta"><span>נזק <b>${m.dmg}</b></span><span>פיצוץ <b>${m.splash}</b></span>${m.slow ? '<span>מאט</span>' : ''}</div>
+        <div class="meta"><span>נזק <b>${m.dmg}</b></span><span>יריות בשנייה <b>${rate(m)}</b></span><span>פיצוץ <b>${m.splash}</b></span>${m.slow ? '<span>מאט</span>' : ''}</div>
         <div class="price"></div><button class="btn" type="button" id="buy${i}"></button>`;
       grid.appendChild(d);
       const c = d.querySelector('canvas'); iconCanvases[i] = c; paintIcon(c, m);
@@ -856,6 +1141,8 @@ function frame(now) {
 
 function start(data) {
   fit(); renderAmmo();
+  const jump = /^#stage(\d+)$/.exec(location.hash);
+  if (jump && !(data && data.level)) data = { level: Math.max(1, +jump[1]), coins: 0, owned: [0] };
   if (data && data.level) {
     G.level = data.level; G.coins = data.coins || 0; G.owned = new Set(data.owned || [0]); G.sel = data.sel || 0; G.kills = data.kills || 0;
     G.mode = 'between'; G.toSpawn = levelStats(G.level).count; showMsg('resume');
