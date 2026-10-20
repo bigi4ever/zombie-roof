@@ -194,9 +194,11 @@ const CFG = {
   bossRocketHits: 5,   // player missiles needed to destroy a boss rocket
   zombieSpeed: 0.9,    // speed multiplier for every regular zombie (walkers and flyers)
   bossSpeed: 13,       // boss walk/climb speed in px/s
+  bossHp: 6000,        // boss HP on the first boss stage; doubles with every boss stage after it
   rocketSpeed: 70,     // boss RPG rocket speed in px/s
 };
 const isBossStage = n => n >= CFG.bossFrom && (n - CFG.bossFrom) % CFG.bossEvery === 0;
+const bossHp = n => CFG.bossHp * 2 ** Math.floor((n - CFG.bossFrom) / CFG.bossEvery);
 const levelStats = n => ({
   // boss stages bring half the usual zombies
   count: Math.round((CFG.baseCount + CFG.countStep * (n - 1)) / (isBossStage(n) ? 2 : 1)),
@@ -441,7 +443,7 @@ function spawnBoss() {
   const st = levelStats(G.level);
   G.zombies.push({
     boss: true, x: W + 90, y: GROUND, s: st.scale * 2, type: 0,
-    hp: st.hp * 2, max: st.hp * 2, dmg: st.dmg * 2, speed: CFG.bossSpeed * st.speed,
+    hp: bossHp(G.level), max: bossHp(G.level), dmg: st.dmg * 2, speed: CFG.bossSpeed * st.speed,
     state: 'walk', anim: 0, atkT: 0, slowT: 0, flash: 0, lunge: 0,
     fireT: 3, pauseT: 0, reload: 9, aim: Math.PI,
   });
