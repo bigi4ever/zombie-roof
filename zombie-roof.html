@@ -192,6 +192,9 @@ const CFG = {
   bossFrom: 10,        // first boss stage
   bossEvery: 5,        // then a boss stage every 5 stages (10, 15, 20, ...)
   bossRocketHits: 5,   // player missiles needed to destroy a boss rocket
+  zombieSpeed: 0.9,    // speed multiplier for every regular zombie (walkers and flyers)
+  bossSpeed: 13,       // boss walk/climb speed in px/s
+  rocketSpeed: 70,     // boss RPG rocket speed in px/s
 };
 const isBossStage = n => n >= CFG.bossFrom && (n - CFG.bossFrom) % CFG.bossEvery === 0;
 const levelStats = n => ({
@@ -420,14 +423,14 @@ function spawnZombie() {
   const z = {
     x: W + rand(30, 90), y: GROUND, s: st.scale * rand(0.92, 1.08), type,
     hp: st.hp, max: st.hp, dmg: st.dmg,
-    speed: rand(44, 56) * t.sp * st.speed,
+    speed: rand(44, 56) * t.sp * st.speed * CFG.zombieSpeed,
     state: 'walk', anim: rand(0, 10), atkT: 0, slowT: 0, flash: 0, lunge: 0, throwAnim: 0,
   };
   const r = Math.random();
   if (r < st.fly) {
     const f = FLYERS[Math.floor(Math.random() * FLYERS.length)];
     z.fly = f.key; z.state = 'fly'; z.s *= 0.85; z.baseY = z.y = rand(170, 470);
-    z.speed = rand(44, 56) * f.sp * st.speed;
+    z.speed = rand(44, 56) * f.sp * st.speed * CFG.zombieSpeed;
   } else if (r < st.fly + st.thrower) {
     z.thrower = true; z.throwX = rand(640, 1000);
   }
@@ -438,7 +441,7 @@ function spawnBoss() {
   const st = levelStats(G.level);
   G.zombies.push({
     boss: true, x: W + 90, y: GROUND, s: st.scale * 2, type: 0,
-    hp: st.hp * 2, max: st.hp * 2, dmg: st.dmg * 2, speed: 26 * st.speed,
+    hp: st.hp * 2, max: st.hp * 2, dmg: st.dmg * 2, speed: CFG.bossSpeed * st.speed,
     state: 'walk', anim: 0, atkT: 0, slowT: 0, flash: 0, lunge: 0,
     fireT: 3, pauseT: 0, reload: 9, aim: Math.PI,
   });
@@ -457,7 +460,7 @@ function popHead(h) {
   for (let i = 0; i < 16; i++) G.parts.push({ x: h.x, y: h.y, vx: rand(-200, 200), vy: rand(-260, 40), life: rand(0.5, 0.9), max: 0.9, size: rand(3, 6) * h.s, color: i % 2 ? '#5f9a2c' : h.skin, g: 900 });
 }
 function fireRocket(z, px, py) {
-  const a = z.aim, sp = 140, s = z.s;
+  const a = z.aim, sp = CFG.rocketSpeed, s = z.s;
   const x = px + Math.cos(a) * 40 * s, y = py + Math.sin(a) * 40 * s;
   G.rockets.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, hits: CFG.bossRocketHits, flash: 0 });
   sfx.rpg(); G.shake = Math.max(G.shake, 6);
