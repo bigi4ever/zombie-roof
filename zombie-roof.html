@@ -213,7 +213,11 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
 // ---------- world constants ----------
 // The world is wider than the screen ratio needs so zombies have a long street to cross; the canvas scales it to fit.
 const W = 1760, H = 990, GROUND = 900, ROOF = 560, WALL = 300;
-const PIVOT_Y = ROOF - 50;
+// Phones and tablets show the wide world on a small screen, so the characters are drawn bigger there.
+// CS scales the player and missiles; regular zombies get a fixed size boost instead, so big late-stage zombies
+// don't fill the screen (the boss is already huge and stays as is).
+const CS = window.matchMedia && matchMedia('(pointer: coarse)').matches ? 1.75 : 1;
+const PIVOT_Y = ROOF - 50 * CS;
 const SHOP = { x: 26, y: ROOF - 104, w: 112, h: 104 };
 
 // Every number the rules talk about lives here.
@@ -465,7 +469,7 @@ function newGame() {
 function spawnZombie() {
   const st = levelStats(G.level), type = Math.floor(Math.random() * ZTYPES.length), t = ZTYPES[type];
   const z = {
-    x: W + rand(30, 90), y: GROUND, s: st.scale * rand(0.92, 1.08), type,
+    x: W + rand(30, 90), y: GROUND, s: (st.scale + (CS - 1) * 0.8) * rand(0.92, 1.08), type,
     hp: st.hp, max: st.hp, dmg: st.dmg,
     speed: rand(44, 56) * t.sp * st.speed * CFG.zombieSpeed,
     state: 'walk', anim: rand(0, 10), atkT: 0, slowT: 0, flash: 0, lunge: 0, throwAnim: 0,
@@ -494,7 +498,7 @@ function spawnBoss() {
 function throwHead(z) {
   z.headless = true; z.throwAnim = 0.5;
   const s = z.s, hx = z.x - 5 * s, hy = z.y - 66 * s;
-  const tx = P.x, ty = ROOF - 66, d = Math.hypot(tx - hx, ty - hy), sp = 230;
+  const tx = P.x, ty = ROOF - 66 * CS, d = Math.hypot(tx - hx, ty - hy), sp = 230;
   G.heads.push({ x: hx, y: hy, vx: (tx - hx) / d * sp, vy: (ty - hy) / d * sp, r: 11 * s, s, skin: ZTYPES[z.type].skin, spin: 0, dmg: z.dmg });
   sfx.toss();
 }
@@ -526,7 +530,7 @@ function hitRocket(r, m) {
 }
 function hurtPlayer(d) {
   P.hp = Math.max(0, P.hp - d); P.hurt = 0.35; G.shake = 14; sfx.hurt();
-  G.texts.push({ x: P.x, y: ROOF - 100, txt: '-' + d, color: '#ff5a4a', life: 1, max: 1, size: 34 });
+  G.texts.push({ x: P.x, y: ROOF - 100 * CS, txt: '-' + d, color: '#ff5a4a', life: 1, max: 1, size: 34 });
   if (P.hp <= 0) gameOver();
 }
 function gameOver(byRocket) {
@@ -539,7 +543,7 @@ function levelCleared() {
 }
 function fire() {
   const m = MISSILES[G.sel], a = P.aim, sp = m.speed;
-  const x = P.x + Math.cos(a) * 40, y = PIVOT_Y + Math.sin(a) * 40;
+  const x = P.x + Math.cos(a) * 40 * CS, y = PIVOT_Y + Math.sin(a) * 40 * CS;
   G.missiles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: G.sel, life: 3 });
   G.cool = m.cd; P.recoil = 1; sfx.launch();
   for (let i = 0; i < 6; i++) G.parts.push({ x: P.x - Math.cos(a) * 18, y: PIVOT_Y - Math.sin(a) * 18, vx: -Math.cos(a) * rand(60, 140) + rand(-30, 30), vy: -Math.sin(a) * rand(60, 140) + rand(-30, 30), life: 0.5, max: 0.5, size: rand(5, 9), color: 'rgba(200,200,210,.5)', smoke: true });
@@ -613,7 +617,7 @@ function update(dt) {
     if (z.boss) {
       z.reload += dt;
       const px = z.x - 2 * z.s, py = z.y - 62 * z.s;
-      z.aim = Math.atan2(ROOF - 45 - py, P.x - px);
+      z.aim = Math.atan2(ROOF - 45 * CS - py, P.x - px);
       if (z.pauseT > 0) { z.pauseT -= dt; sp = 0; }
       if (z.state === 'walk' && z.x < W - 60) {
         z.fireT -= dt;
@@ -629,9 +633,9 @@ function update(dt) {
       if (z.y <= ROOF) { z.y = ROOF; z.x = WALL - 6; z.state = 'roof'; }
     } else if (z.state === 'roof') {
       z.x -= sp * dt; z.anim += dt * sp * 0.11;
-      if (z.x <= P.x + 30 + 14 * z.s * wf) { z.state = 'attack'; z.atkT = 0.45; }
+      if (z.x <= P.x + 30 * CS + 14 * z.s * wf) { z.state = 'attack'; z.atkT = 0.45; }
     } else if (z.state === 'fly') {
-      const tx = P.x + 34 + 14 * z.s * wf, ty = ROOF - 16;
+      const tx = P.x + 34 * CS + 14 * z.s * wf, ty = ROOF - 16;
       const dx = tx - z.x, dy = ty - z.baseY, d = Math.hypot(dx, dy);
       z.anim += dt * 3;
       if (d <= sp * dt + 2) { z.x = tx; z.baseY = ty; z.state = 'attack'; z.atkT = 0.45; }
@@ -647,15 +651,15 @@ function update(dt) {
   for (const h of G.heads) {
     h.x += h.vx * dt; h.y += h.vy * dt; h.spin += dt * 9;
     if (Math.random() < 0.4) G.parts.push({ x: h.x, y: h.y + h.r * 0.6, vx: rand(-20, 20), vy: rand(0, 40), life: 0.5, max: 0.5, size: rand(2, 4), color: '#5f9a2c', g: 500 });
-    if (Math.hypot(h.x - P.x, h.y - (ROOF - 50)) < h.r + 18) { popHead(h); hurtPlayer(h.dmg); if (G.mode !== 'play') return; }
+    if (Math.hypot(h.x - P.x, h.y - (ROOF - 50 * CS)) < h.r + 18 * CS) { popHead(h); hurtPlayer(h.dmg); if (G.mode !== 'play') return; }
     if (h.x < -60 || h.y > H + 60 || h.y < -80) h.dead = true;
   }
 
   for (const r of G.rockets) {
     r.x += r.vx * dt; r.y += r.vy * dt; r.flash = Math.max(0, r.flash - dt);
     if (Math.random() < 0.9) G.parts.push({ x: r.x - r.vx * 0.15, y: r.y - r.vy * 0.15, vx: rand(-15, 15), vy: rand(-25, 0), life: 0.7, max: 0.7, size: rand(5, 9), color: 'rgba(170,165,180,.4)', smoke: true });
-    if (Math.hypot(r.x - P.x, r.y - (ROOF - 45)) < 30) {
-      r.dead = true; bigBoom(P.x, ROOF - 45, '#ff7a2b');
+    if (Math.hypot(r.x - P.x, r.y - (ROOF - 45 * CS)) < 30 * CS) {
+      r.dead = true; bigBoom(P.x, ROOF - 45 * CS, '#ff7a2b');
       P.hp = 0; P.hurt = 0.5; G.shake = 26;
       G.texts.push({ x: P.x + 60, y: ROOF - 120, txt: 'פגיעה ישירה', color: '#ff5a4a', life: 1.4, max: 1.4, size: 34, rtl: true });
       gameOver(true); return;
@@ -891,7 +895,7 @@ function drawRocket(r) {
 
 function drawPlayer() {
   const hurt = P.hurt > 0 && Math.floor(P.hurt * 20) % 2 === 0;
-  ctx.save(); ctx.translate(P.x, P.y);
+  ctx.save(); ctx.translate(P.x, P.y); ctx.scale(CS, CS);
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, 18, 4, 0, 0, 7); ctx.fill();
   const uni = hurt ? '#c9372d' : '#5c6b3a';
   limb(-4, -28, 0.06, 26, 10, '#3a4529', '#1a1a1c');
@@ -905,7 +909,7 @@ function drawPlayer() {
   ctx.restore();
   // launcher on the shoulder
   const M = MISSILES[G.sel];
-  ctx.save(); ctx.translate(P.x, PIVOT_Y); ctx.rotate(P.aim); ctx.translate(-P.recoil * 6, 0);
+  ctx.save(); ctx.translate(P.x, PIVOT_Y); ctx.rotate(P.aim); ctx.scale(CS, CS); ctx.translate(-P.recoil * 6, 0);
   ctx.fillStyle = '#2c361f'; rr(-20, -7, 58, 14, 3); ctx.fill();
   ctx.fillStyle = '#3d4a2b'; ctx.fillRect(-20, -7, 58, 4);
   ctx.fillStyle = '#1b2014'; ctx.fillRect(-24, -8, 6, 16); ctx.fillRect(10, 7, 6, 8);
@@ -948,7 +952,7 @@ function drawShop() {
 
 function drawMissile(m) {
   const M = MISSILES[m.t];
-  ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(Math.atan2(m.vy, m.vx));
+  ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(Math.atan2(m.vy, m.vx)); ctx.scale(CS, CS);
   const fl = 10 + Math.random() * 8;
   ctx.fillStyle = M.glow; ctx.globalAlpha = 0.85;
   ctx.beginPath(); ctx.moveTo(-12, -4); ctx.lineTo(-12 - fl, 0); ctx.lineTo(-12, 4); ctx.fill();
