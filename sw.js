@@ -1,7 +1,8 @@
 // Offline support for the installed app.
 // Pages: network first, so a new version on GitHub Pages arrives on the next open; the cache is the offline fallback.
+// GitHub Pages sends max-age=600, so pages are fetched with cache: 'no-cache' to skip the browser's 10-minute HTTP cache.
 // Everything else (icons, fonts): cache first.
-const CACHE = 'zombie-roof-v1';
+const CACHE = 'zombie-roof-v2';
 const CORE = [
   './',
   './index.html',
@@ -13,7 +14,7 @@ const CORE = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -40,7 +41,7 @@ self.addEventListener('fetch', e => {
 
   if (url.origin === location.origin && isPage) {
     e.respondWith(
-      fetch(req).then(res => save(req, res))
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then(res => save(req, res))
         .catch(() => caches.match(req, { ignoreSearch: true }).then(hit => hit || caches.match('./zombie-roof.html')))
     );
     return;

@@ -1233,7 +1233,17 @@ matchMedia('(pointer: coarse) and (orientation: portrait)').addEventListener('ch
 window.addEventListener('orientationchange', () => setTimeout(fit, 250));
 document.addEventListener('contextmenu', e => e.preventDefault());
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  // When a new version's service worker takes over, reload once so the new game files are used,
+  // but only on the start screen so a running game is never interrupted.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || G.mode !== 'menu') return;
+    reloaded = true; location.reload();
+  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then(reg => { reg.update(); document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); }); })
+    .catch(() => {}));
 }
 
 $('startBtn').addEventListener('click', () => { audio(); if (coarse && !standalone) goFull(); newGame(); });
