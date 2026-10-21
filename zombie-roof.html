@@ -2,8 +2,17 @@
 <html lang="he">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>גג הזומבים</title>
+<meta name="description" content="מגינים על גג הבניין מפני זומבים מטפסים, עם טילים וחנות שדרוגים.">
+<meta name="theme-color" content="#0c0e1b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="גג הזומבים">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&family=Secular+One&display=swap">
@@ -25,7 +34,7 @@
   --body:'Rubik',system-ui,'Segoe UI',Arial,sans-serif;
   color-scheme:dark;
 }
-html{height:100%;box-sizing:border-box;background:var(--night)}
+html{height:100%;box-sizing:border-box;background:var(--night);overscroll-behavior:none}
 *,*::before,*::after{box-sizing:inherit}
 body{
   height:100%;margin:0;overflow:hidden;
@@ -34,6 +43,7 @@ body{
   padding-right:max(16px,env(safe-area-inset-right,0px));
   padding-block:12px;
   display:grid;place-items:center;
+  touch-action:manipulation;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;
 }
 #stage{position:relative;width:640px;height:360px;--u:.5;border-radius:10px;overflow:hidden;
   box-shadow:0 0 0 1px var(--line),0 20px 60px rgba(0,0,0,.55);user-select:none;-webkit-user-select:none}
@@ -62,6 +72,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .icon-btn{background:rgba(12,14,27,.72);border:1px solid var(--line);border-radius:999px;padding:.35em .8em;line-height:1.2}
 .icon-btn:hover{background:var(--panel-2)}
+.icon-btn.sq{padding:.35em .5em;display:grid;place-items:center}
+.icon-btn svg{width:1.15em;height:1.15em;display:block}
+.hud .pill,.hud button{white-space:nowrap}
 .shop-btn{background:var(--gold);color:#2a1d00;border-color:transparent;font-weight:700}
 .shop-btn:hover{background:#ffd877}
 
@@ -111,10 +124,31 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
 .price{display:flex;align-items:center;gap:.35em;color:var(--gold);font-weight:700}
 @media (max-width:1000px){.shop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:700px){.shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,1fr)}}
-@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+/* phones and tablets: edge to edge, bigger touch targets */
+@media (pointer:coarse){
+  body{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+  #stage{border-radius:0;box-shadow:none}
+  .hud{font-size:clamp(12px,calc(var(--u)*24px),19px);padding:6px 10px;gap:6px}
+  .hud .hp .lbl{display:none}
+  .bar{width:calc(var(--u)*130px)}
+  .icon-btn.sq{padding:.45em .6em}
+  .icon-btn{padding:.45em .9em}
+  .ammo{padding:.45em .8em;font-size:.78em}
+  .overlay{font-size:clamp(12px,calc(var(--u)*24px),18px);padding:10px}
+}
+.for-touch{display:none}
+@media (pointer:coarse){.for-touch{display:list-item}.for-mouse{display:none}}
+#rotate{position:fixed;inset:0;z-index:10;display:none;place-items:center;background:var(--night);text-align:center;padding:24px}
+#rotate .phone{width:46px;height:78px;border:3px solid var(--ink);border-radius:9px;margin:0 auto 18px;animation:turn 2.4s ease-in-out infinite}
+#rotate h2{font-family:var(--display);font-weight:400;font-size:26px;margin:0 0 8px;color:var(--rot)}
+#rotate p{margin:0;color:var(--muted)}
+@keyframes turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (pointer:coarse) and (orientation:portrait){#rotate{display:grid}}
+@media (prefers-reduced-motion:reduce){#rotate .phone{animation:none;transform:rotate(-90deg)}.bar i{transition:none}}
 </style>
 </head>
 <body>
+<div id="rotate" dir="rtl"><div><div class="phone"></div><h2>סובבו את הטלפון לרוחב</h2><p>המשחק עובד רק כשהמסך לרוחב.</p></div></div>
 <div id="stage" dir="rtl">
   <canvas id="cv" aria-label="שדה המשחק"></canvas>
 
@@ -124,8 +158,9 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
     <div class="tools">
       <div class="pill coins"><span class="coin"></span><b id="coinTxt">0</b></div>
       <button class="icon-btn shop-btn" id="shopBtn" type="button">חנות</button>
-      <button class="icon-btn" id="pauseBtn" type="button" aria-label="השהיה">השהיה</button>
-      <button class="icon-btn" id="muteBtn" type="button" aria-label="קול">קול: פועל</button>
+      <button class="icon-btn sq" id="fsBtn" type="button" hidden aria-label="מסך מלא" title="מסך מלא"></button>
+      <button class="icon-btn sq" id="pauseBtn" type="button" aria-label="השהיה" title="השהיה"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v14M15 5v14"/></svg></button>
+      <button class="icon-btn sq" id="muteBtn" type="button" aria-label="השתקה" title="השתקה"></button>
     </div>
   </div>
   <div class="hud bottom" id="ammoBar"></div>
@@ -135,8 +170,10 @@ kbd{font-family:var(--body);font-size:.85em;background:var(--panel-2);border:1px
       <h1>גג הזומבים</h1>
       <p>הזומבים מגיעים מהרחוב, מטפסים על קיר הבניין ומנסים להגיע אליכם לגג. אל תתנו להם.</p>
       <ul>
-        <li>מכוונים עם העכבר ולוחצים כדי לשגר טיל. אפשר להחזיק את הלחיצה.</li>
-        <li><kbd>1</kbd>–<kbd>9</kbd> ו־<kbd>0</kbd> מחליפים טיל · <kbd>B</kbd> פותח את החנות · <kbd>P</kbd> משהה</li>
+        <li class="for-mouse">מכוונים עם העכבר ולוחצים כדי לשגר טיל. אפשר להחזיק את הלחיצה.</li>
+        <li class="for-touch">נוגעים במסך כדי לכוון ולשגר טיל. מחזיקים את האצבע כדי לירות ברצף, ומזיזים אותה כדי לכוון.</li>
+        <li class="for-touch">מחליפים טיל בכפתורים שלמטה. החנות והשהיה בכפתורים שלמעלה.</li>
+        <li class="for-mouse"><kbd>1</kbd>–<kbd>9</kbd> ו־<kbd>0</kbd> מחליפים טיל · <kbd>B</kbd> פותח את החנות · <kbd>P</kbd> משהה</li>
         <li>כל זומבי שמחוסל שווה מטבע אחד. החנות שעל הגג, מאחוריכם, מוכרת טילים חזקים יותר.</li>
       </ul>
       <div class="stats">
@@ -1147,11 +1184,45 @@ window.addEventListener('keydown', e => {
   } else if (k === ' ' && G.mode === 'play') { e.preventDefault(); G.firing = true; }
 });
 window.addEventListener('keyup', e => { if (e.key === ' ') G.firing = false; });
-$('startBtn').addEventListener('click', () => { audio(); newGame(); });
+const ICONS = {
+  fs: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  fsExit: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
+  sound: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  mute: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
+};
+const muteIcon = () => { const b = $('muteBtn'); b.innerHTML = muted ? ICONS.mute : ICONS.sound; b.ariaLabel = b.title = muted ? 'הפעלת קול' : 'השתקה'; };
+muteIcon();
+
+// ---------- mobile ----------
+const coarse = matchMedia('(pointer: coarse)').matches;
+const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+const canFull = !!(document.documentElement.requestFullscreen && document.fullscreenEnabled);
+function goFull() {
+  if (!canFull || document.fullscreenElement) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}))
+    .catch(() => {});
+}
+if (canFull && !standalone) {
+  const fsBtn = $('fsBtn'); fsBtn.hidden = false;
+  fsBtn.addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else goFull(); });
+  const fsIcon = () => { const on = !!document.fullscreenElement; fsBtn.innerHTML = on ? ICONS.fsExit : ICONS.fs; fsBtn.ariaLabel = fsBtn.title = on ? 'יציאה ממסך מלא' : 'מסך מלא'; };
+  fsIcon();
+  document.addEventListener('fullscreenchange', () => { fsIcon(); setTimeout(fit, 100); });
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopFire(); pause(); } });
+matchMedia('(pointer: coarse) and (orientation: portrait)').addEventListener('change', e => { if (e.matches) { stopFire(); pause(); } setTimeout(fit, 150); });
+window.addEventListener('orientationchange', () => setTimeout(fit, 250));
+document.addEventListener('contextmenu', e => e.preventDefault());
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
+$('startBtn').addEventListener('click', () => { audio(); if (coarse && !standalone) goFull(); newGame(); });
 $('shopBtn').addEventListener('click', () => { audio(); openShop(); });
 $('shopClose').addEventListener('click', closeShop);
 $('pauseBtn').addEventListener('click', () => { if (G.mode === 'play') pause(); else if (G.mode === 'paused') resume(); });
-$('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? 'קול: כבוי' : 'קול: פועל'; });
+$('muteBtn').addEventListener('click', () => { muted = !muted; muteIcon(); });
 
 // ---------- loop ----------
 let last = performance.now();
