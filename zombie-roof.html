@@ -291,10 +291,10 @@ const MISSILES = [
   { name: 'טיל חור שחור', dmg: 275, price: 180, cd: 0.208, speed: 1400, color: '#7a5cff', glow: '#2b0f7a', splash: 130 },
 ];
 const rate = m => (1 / m.cd).toFixed(1);
-// Barriers stand on the street. Zombies on foot stop and hit them; 5 hits break one. No purchase limit.
+// Barriers stand on the street. Zombies on foot stop and hit them; 10 hits break one. No purchase limit.
 const BARRIERS = [
-  { kind: 'wood',  name: 'מחסום',         price: 20, hits: 5, dmg: 0 },
-  { kind: 'spike', name: 'מחסום דוקרנים', price: 30, hits: 5, dmg: 50 },  // dmg every CFG.attackEvery to each zombie touching it
+  { kind: 'wood',  name: 'מחסום',         price: 15, hits: 10, dmg: 0 },
+  { kind: 'spike', name: 'מחסום דוקרנים', price: 25, hits: 10, dmg: 50 },  // dmg every CFG.attackEvery to each zombie touching it
 ];
 const BW = 46 * CS, BH = 74 * CS;
 const STREET_MIN = WALL + 40, STREET_MAX = W - 40;
@@ -1058,6 +1058,8 @@ function drawShop() {
 
 // barrier in unit coordinates: centred on x = 0, standing on y = 0, 46 wide and 74 tall
 function barrierShape(g, kind, hits) {
+  const max = BARRIERS.find(B => B.kind === kind).hits;
+  if (hits === undefined) hits = max;
   const rect = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
   if (kind === 'wood') {
     rect(-21, -70, 8, 70, '#6b4024'); rect(13, -70, 8, 70, '#6b4024');
@@ -1080,7 +1082,7 @@ function barrierShape(g, kind, hits) {
   // a crack for every hit taken
   g.strokeStyle = 'rgba(15,10,10,.75)'; g.lineWidth = 1.6; g.beginPath();
   const crack = [[-8, -60, 6, -48], [4, -30, -10, -18], [-14, -50, -4, -40], [10, -66, 2, -54]];
-  for (let i = 0; i < Math.min(4, 5 - hits); i++) {
+  for (let i = 0; i < Math.min(4, Math.ceil((max - hits) / max * 4)); i++) {
     const c = crack[i]; g.moveTo(c[0], c[1]); g.lineTo((c[0] + c[2]) / 2 + 3, (c[1] + c[3]) / 2); g.lineTo(c[2], c[3]);
   }
   g.stroke();
@@ -1089,7 +1091,8 @@ function drawBarrier(b) {
   ctx.save(); ctx.translate(b.x, GROUND); ctx.scale(CS, CS);
   barrierShape(ctx, b.kind, b.hits);
   if (b.flash > 0) { ctx.globalAlpha = 0.6; ctx.fillStyle = '#ffffff'; ctx.fillRect(-23, -76, 46, 76); ctx.globalAlpha = 1; }
-  for (let i = 0; i < BARRIERS[0].hits; i++) { ctx.fillStyle = i < b.hits ? '#ffc94a' : 'rgba(255,255,255,.18)'; circ(-16 + i * 8, -94, 3); ctx.fill(); }
+  const max = BARRIERS.find(B => B.kind === b.kind).hits;
+  for (let i = 0; i < max; i++) { ctx.fillStyle = i < b.hits ? '#ffc94a' : 'rgba(255,255,255,.18)'; circ(-(max - 1) * 2.75 + i * 5.5, -94, 2.3); ctx.fill(); }
   ctx.restore();
 }
 // the barrier being placed: see-through, green where it can stand, red where it can't
@@ -1099,7 +1102,7 @@ function drawPlacing() {
   ctx.strokeStyle = 'rgba(143,209,79,.5)'; ctx.lineWidth = 2; ctx.setLineDash([10, 8]);
   ctx.beginPath(); ctx.moveTo(STREET_MIN, GROUND + 9); ctx.lineTo(STREET_MAX, GROUND + 9); ctx.stroke(); ctx.setLineDash([]);
   ctx.save(); ctx.translate(p.x, GROUND); ctx.scale(CS, CS);
-  ctx.globalAlpha = 0.5; barrierShape(ctx, BARRIERS[p.i].kind, 5); ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.5; barrierShape(ctx, BARRIERS[p.i].kind); ctx.globalAlpha = 1;
   const col = p.valid ? '143,209,79' : '224,72,60';
   ctx.fillStyle = `rgba(${col},.25)`; ctx.fillRect(-27, -88, 54, 92);
   ctx.strokeStyle = `rgba(${col},${0.6 + 0.4 * pulse})`; ctx.lineWidth = 2.5; ctx.strokeRect(-27, -88, 54, 92);
@@ -1279,7 +1282,7 @@ function renderShop() {
       const x = d.querySelector('canvas').getContext('2d');
       x.fillStyle = '#1a1e36'; x.fillRect(0, 0, 240, 80);
       x.fillStyle = '#2a2933'; x.fillRect(0, 74, 240, 6);
-      x.save(); x.translate(120, 75); x.scale(0.82, 0.82); barrierShape(x, B.kind, 5); x.restore();
+      x.save(); x.translate(120, 75); x.scale(0.82, 0.82); barrierShape(x, B.kind); x.restore();
       d.querySelector('button').addEventListener('click', () => buyBarrier(i));
     });
   }
