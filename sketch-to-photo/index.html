@@ -221,18 +221,19 @@
     <h2>הגדרות</h2>
     <label for="provider">שירות יצירת התמונות</label>
     <select id="provider">
+      <option value="cloudflare">Cloudflare (חינם)</option>
       <option value="gemini">Google Gemini</option>
       <option value="openai">OpenAI</option>
     </select>
 
-    <label for="apiKey">מפתח API</label>
+    <label for="apiKey" id="apiKeyLabel">מפתח API</label>
     <input id="apiKey" type="password" dir="ltr" autocomplete="off" spellcheck="false" placeholder="הדביקו כאן את המפתח">
 
-    <label for="model">מודל</label>
+    <label for="model" id="modelLabel">מודל</label>
     <input id="model" dir="ltr" autocomplete="off" spellcheck="false">
 
     <p class="note" id="providerNote"></p>
-    <p class="note">המפתח נשמר רק בטלפון הזה ונשלח ישירות לשירות שבחרתם — לא לשום שרת אחר.</p>
+    <p class="note" id="privacyNote"></p>
 
     <div class="dialog-actions">
       <button class="primary" value="save">שמירה</button>
@@ -246,13 +247,30 @@
   'use strict';
 
   // ---------- Settings ----------
+  const GUIDE = 'https://github.com/bigi4ever/zombie-roof/blob/main/sketch-to-photo/CLOUDFLARE.md';
   const PROVIDERS = {
+    cloudflare: {
+      model: '',
+      keyLabel: 'סיסמה (רק אם הגדרתם אחת בשרת)',
+      keyPlaceholder: 'אפשר להשאיר ריק',
+      keyRequired: false,
+      modelLabel: 'כתובת השרת ב-Cloudflare',
+      modelPlaceholder: 'https://sketch-to-photo.….workers.dev',
+      note: 'חינם: עשרות תמונות ביום בחשבון Cloudflare חינמי. צריך להקים פעם אחת שרת קטן — <a href="' + GUIDE + '" target="_blank" rel="noopener">הוראות בעברית</a>.',
+      privacy: 'הכתובת והסיסמה נשמרות רק בטלפון הזה, והציור נשלח רק לשרת שלכם ב-Cloudflare.',
+    },
     gemini: {
       model: 'gemini-2.5-flash-image',
+      keyLabel: 'מפתח API', keyPlaceholder: 'הדביקו כאן את המפתח', keyRequired: true,
+      modelLabel: 'מודל', modelPlaceholder: '',
+      privacy: 'המפתח נשמר רק בטלפון הזה ונשלח ישירות ל-Google — לא לשום שרת אחר.',
       note: 'מפתח מקבלים ב-<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. יצירת תמונות לא כלולה בתוכנית החינמית: צריך להפעיל שם חיוב (Billing), בערך 4 סנט לתמונה. אם גוגל הוציאה מודל תמונות חדש יותר, אפשר לכתוב את שמו בשדה המודל.',
     },
     openai: {
       model: 'gpt-image-1',
+      keyLabel: 'מפתח API', keyPlaceholder: 'הדביקו כאן את המפתח', keyRequired: true,
+      modelLabel: 'מודל', modelPlaceholder: '',
+      privacy: 'המפתח נשמר רק בטלפון הזה ונשלח ישירות ל-OpenAI — לא לשום שרת אחר.',
       note: 'מפתח מקבלים ב-<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI Platform</a> (בתשלום לפי שימוש). אפשר לכתוב בשדה המודל גם מודל תמונות חדש יותר.',
     },
   };
@@ -262,10 +280,16 @@
     set(k, v) { try { localStorage.setItem('s2p.' + k, v); } catch {} },
   };
   const settings = {
-    provider: store.get('provider', 'gemini'),
-    keys: { gemini: store.get('key.gemini', ''), openai: store.get('key.openai', '') },
-    models: { gemini: store.get('model.gemini', PROVIDERS.gemini.model), openai: store.get('model.openai', PROVIDERS.openai.model) },
+    provider: store.get('provider', 'cloudflare'),
+    keys: {},
+    models: {},
   };
+  // For Cloudflare the "model" is the address of the user's own Worker.
+  for (const p of Object.keys(PROVIDERS)) {
+    settings.keys[p] = store.get('key.' + p, '');
+    settings.models[p] = store.get('model.' + p, PROVIDERS[p].model);
+  }
+  if (!PROVIDERS[settings.provider]) settings.provider = 'cloudflare';
 
   const $ = id => document.getElementById(id);
   const dlg = $('settings');
@@ -274,7 +298,13 @@
     $('provider').value = provider;
     $('apiKey').value = settings.keys[provider];
     $('model').value = settings.models[provider];
-    $('providerNote').innerHTML = PROVIDERS[provider].note;
+    const cfg = PROVIDERS[provider];
+    $('apiKeyLabel').textContent = cfg.keyLabel;
+    $('apiKey').placeholder = cfg.keyPlaceholder;
+    $('modelLabel').textContent = cfg.modelLabel;
+    $('model').placeholder = cfg.modelPlaceholder;
+    $('providerNote').innerHTML = cfg.note;
+    $('privacyNote').textContent = cfg.privacy;
   }
   $('provider').addEventListener('change', () => fillSettings($('provider').value));
   $('settingsBtn').addEventListener('click', () => { fillSettings(settings.provider); dlg.showModal(); });
@@ -282,9 +312,9 @@
     if (dlg.returnValue !== 'save') return;
     const p = $('provider').value;
     settings.provider = p;
-    // Keys are plain ASCII; drop spaces and invisible direction marks a phone keyboard may paste in.
+    // Keys and addresses are plain ASCII; drop spaces and invisible direction marks a phone keyboard may paste in.
     settings.keys[p] = $('apiKey').value.replace(/[^\x21-\x7e]/g, '');
-    settings.models[p] = $('model').value.trim() || PROVIDERS[p].model;
+    settings.models[p] = $('model').value.replace(/[^\x21-\x7e]/g, '') || PROVIDERS[p].model;
     store.set('provider', p);
     store.set('key.' + p, settings.keys[p]);
     store.set('model.' + p, settings.models[p]);
@@ -407,6 +437,17 @@
     return p;
   }
 
+  // Cloudflare's FLUX.2 [klein] takes input images under 512x512.
+  function smallPadBlob(size) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    c.getContext('2d').drawImage(pad, 0, 0, size, size);
+    return new Promise(res => c.toBlob(res, 'image/png'));
+  }
+  function imageMime(b64) {
+    return b64.startsWith('/9j/') ? 'image/jpeg' : b64.startsWith('UklGR') ? 'image/webp' : 'image/png';
+  }
+
   function padBlob() {
     return new Promise(res => pad.toBlob(res, 'image/png'));
   }
@@ -482,6 +523,26 @@
     return item.b64_json ? 'data:image/png;base64,' + item.b64_json : item.url;
   }
 
+  async function generateCloudflare(blob, desc, password, url) {
+    if (!/^https:\/\//i.test(url)) url = 'https://' + url;
+    const form = new FormData();
+    form.append('image', await smallPadBlob(480), 'sketch.png');
+    form.append('description', desc);
+    const headers = {};
+    if (password) headers['X-App-Password'] = password;
+    const res = await fetch(url, { method: 'POST', headers, body: form });
+    if (!res.ok) {
+      const err = await apiError(res);
+      if (res.status === 401) throw new Error('הסיסמה לא נכונה. היא צריכה להיות זהה לסיסמה שכתובה בקוד של השרת.');
+      if (res.status === 404 || res.status === 405) throw new Error('הכתובת לא מובילה לשרת של האפליקציה. בדקו את כתובת השרת בהגדרות.');
+      if (res.status === 429) throw new Error('נגמרה המכסה החינמית של היום ב-Cloudflare. היא מתחדשת כל לילה (בין 2:00 ל-3:00 שעון ישראל).');
+      throw err;
+    }
+    const j = await res.json();
+    if (!j.image) throw new Error('לא התקבלה תמונה מהשרת.');
+    return 'data:' + imageMime(j.image) + ';base64,' + j.image;
+  }
+
   function showError(msg) {
     $('error').textContent = msg;
     $('error').classList.toggle('on', !!msg);
@@ -491,7 +552,7 @@
   async function generate(blob) {
     const p = settings.provider;
     const key = settings.keys[p];
-    if (!key) {
+    if (PROVIDERS[p].keyRequired ? !key : !settings.models[p]) {
       fillSettings(p);
       dlg.showModal();
       return;
@@ -499,9 +560,10 @@
     showError('');
     $('busy').classList.add('on');
     try {
-      const prompt = buildPrompt($('desc').value.trim());
-      const fn = p === 'openai' ? generateOpenAI : generateGemini;
-      const src = await fn(blob, prompt, key, settings.models[p]);
+      const desc = $('desc').value.trim();
+      const src = p === 'cloudflare'
+        ? await generateCloudflare(blob, desc, key, settings.models[p])
+        : await (p === 'openai' ? generateOpenAI : generateGemini)(blob, buildPrompt(desc), key, settings.models[p]);
       $('photo').src = src;
       $('sketchThumb').src = URL.createObjectURL(blob);
       $('app').classList.add('show-result');
