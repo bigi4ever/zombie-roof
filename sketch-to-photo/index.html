@@ -136,29 +136,16 @@
   .compare { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: .9rem; }
   .compare img { width: 72px; height: 72px; border-radius: 10px; box-shadow: none; background: #fff; }
 
-  /* Phone on its side: board on one side, tools on the other, everything on one screen. */
-  @media (orientation: landscape) and (max-height: 640px) {
-    .app { max-width: none; padding-top: max(8px, env(safe-area-inset-top)); gap: 8px; }
-    h1 { font-size: 1.1rem; }
-    .icon-btn { width: 40px; height: 40px; }
-    .editor {
-      display: grid;
-      grid-template-columns: auto minmax(260px, 1fr);
-      grid-auto-rows: min-content;
-      gap: 8px 12px;
-      align-items: start;
-    }
-    .editor .board { grid-row: 1 / span 5; width: calc(100svh - 80px); }
-    .editor > :not(.board) { grid-column: 2; }
-    .tools { padding: 8px; gap: 8px; }
-    textarea { min-height: 44px; }
-    .primary { padding: 12px; }
-    .result { display: none; }
-    .app.show-result .result {
-      display: grid; grid-template-columns: auto minmax(220px, 1fr); grid-auto-rows: min-content; gap: 8px 12px;
-    }
-    .result > #photo { grid-row: 1 / span 3; width: calc(100svh - 80px); }
-    .result > :not(#photo) { grid-column: 2; }
+  /* The app is made for a phone held upright; on its side, ask to turn it back. */
+  .rotate {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg);
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    text-align: center; padding: 24px; font-size: 1.1rem;
+  }
+  .rotate b { font-size: 3rem; display: inline-block; animation: turn 1.6s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(90deg); } 70%, 100% { transform: rotate(0deg); } }
+  @media (pointer: coarse) and (orientation: landscape) and (max-height: 640px) {
+    .rotate { display: flex; }
   }
 
   /* Loading overlay */
@@ -247,6 +234,8 @@
     <button class="primary" id="back">✏️ חזרה לציור</button>
   </section>
 </div>
+
+<div class="rotate" role="alert"><b>📱</b>סובבו את הטלפון לאורך</div>
 
 <div class="busy" id="busy">
   <div class="spinner"></div>
@@ -661,6 +650,11 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });
+
+  // Installed app: hold it upright. Browsers only allow the lock there, so failures are expected and ignored.
+  if (matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) {
+    try { screen.orientation.lock('portrait').catch(() => {}); } catch {}
+  }
 
   if ('serviceWorker' in navigator) {
     addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
