@@ -214,7 +214,7 @@
 
   <section class="result">
     <img id="photo" alt="התמונה שנוצרה">
-    <div class="compare"><img id="sketchThumb" alt="הציור המקורי"><span>נוצר מהציור שלך</span></div>
+    <div class="compare"><img id="sketchThumb" alt="הציור המקורי"><span id="madeInfo">נוצר מהציור שלך</span></div>
     <div class="row">
       <button class="secondary" id="save">💾 שמירה / שיתוף</button>
       <button class="secondary" id="again">🔄 עוד גרסה</button>
@@ -570,6 +570,7 @@
     }
     const j = await res.json();
     if (!j.image) throw new Error('לא התקבלה תמונה מהשרת.');
+    if (j.timing) stepTimes = 'תרגום ' + j.timing.translate + ' · תיאור הציור ' + j.timing.describe + ' · תמונה ' + j.timing.image;
     return 'data:' + imageMime(j.image) + ';base64,' + j.image;
   }
 
@@ -579,6 +580,7 @@
   }
 
   let lastSketch = null;
+  let stepTimes = '';
   async function generate(blob) {
     const p = settings.provider;
     const key = settings.keys[p];
@@ -589,6 +591,8 @@
     }
     showError('');
     $('busy').classList.add('on');
+    const started = Date.now();
+    stepTimes = '';
     try {
       const desc = $('desc').value.trim();
       const src = p === 'cloudflare'
@@ -596,6 +600,8 @@
         : await (p === 'openai' ? generateOpenAI : generateGemini)(blob, buildPrompt(desc), key, settings.models[p]);
       $('photo').src = src;
       $('sketchThumb').src = URL.createObjectURL(blob);
+      $('madeInfo').textContent = 'נוצר מהציור שלך ב-' + Math.round((Date.now() - started) / 1000) + ' שניות' +
+        (stepTimes ? ' (' + stepTimes + ')' : '');
       $('app').classList.add('show-result');
       window.scrollTo(0, 0);
     } catch (err) {
