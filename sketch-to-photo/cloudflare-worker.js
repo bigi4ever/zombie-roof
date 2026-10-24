@@ -2,9 +2,11 @@
 // Setup steps in Hebrew: CLOUDFLARE.md next to this file.
 // The Worker needs a Workers AI binding named AI (Settings → Bindings → Workers AI).
 //
-// The app POSTs multipart form data: image (the sketch, under 512x512) and description (optional, any language).
+// The app POSTs multipart form data: image (the sketch, under 512x512), description (optional, any language)
+// and mode ('follow' or 'free').
 // 1. A vision model looks at the sketch and writes an English description of the real scene it shows.
-// 2. FLUX.2 [klein] redraws the sketch as a photo from that description.
+// 2. FLUX.2 [klein] makes a photo from that description. In 'follow' mode it also gets the sketch as a layout
+//    guide; in 'free' mode it gets only the description, which looks more real but keeps less of the layout.
 // Reply: { image: <base64>, prompt } or { error: { message } }.
 
 // Optional: set a password here and type the same one in the app's settings,
@@ -43,17 +45,24 @@ export default {
     const bytes = new Uint8Array(await image.arrayBuffer());
     const type = image.type || 'image/png';
 
-    const scene = await describe(env, bytes, type, desc);
-    const prompt =
-      'Turn this rough hand-drawn sketch into a photorealistic photograph. ' +
-      (scene ? 'The photo shows: ' + scene.replace(/[.\s]*$/, '. ') : '') +
-      'Keep the same elements in the same positions and composition, using the sketch colors as hints. ' +
-      'Real-world materials and textures, natural lighting, realistic proportions, depth and shadows, ' +
-      'shot on a high-quality camera. No drawing lines, no cartoon, no illustration, no paper, no text.';
+    const scene = (await describe(env, bytes, type, desc)).replace(/[.\s]*$/, '.');
+    // Without a description there is nothing to draw from but the sketch itself.
+    const free = form.get('mode') === 'free' && scene.length > 1;
+    const photo =
+      'Real people have natural human anatomy, skin, hair and real clothes; animals, plants, water, sky and objects ' +
+      'have real-world materials and textures. Natural lighting, realistic proportions, depth of field and shadows, ' +
+      'shot on a professional camera. No drawing, no outlines, no cartoon, no illustration, no toy, no puppet, no text.';
+    const prompt = free
+      ? 'A photorealistic photograph: ' + scene + ' ' + photo
+      : 'Create a photorealistic photograph of the scene this rough sketch represents' +
+        (scene.length > 1 ? ': ' + scene : '.') + ' ' +
+        'Use the sketch only as a rough guide for what is where and how big; do not copy the shapes of its lines. ' +
+        'Stick figures become real people with real bodies; scribbled lines become the real thing they stand for ' +
+        '(sea waves, grass, clouds, sun rays), never ropes, wires, sticks or objects shaped like the lines. ' + photo;
 
     const fd = new FormData();
     fd.append('prompt', prompt);
-    fd.append('input_image_0', new Blob([bytes], { type }), 'sketch');
+    if (!free) fd.append('input_image_0', new Blob([bytes], { type }), 'sketch');
     fd.append('width', String(SIZE));
     fd.append('height', String(SIZE));
     const body = new Response(fd);
@@ -68,16 +77,19 @@ export default {
     }
     const b64 = await imageBase64(out);
     if (!b64) return fail(502, 'The model returned no image.');
-    return json({ image: b64, prompt });
+    return json({ image: b64, prompt, mode: free ? 'free' : 'follow' });
   },
 };
 
 // English description of the scene in the sketch, or '' if no model could produce one.
 async function describe(env, bytes, type, desc) {
   const ask =
-    'This is a rough hand-drawn sketch, maybe drawn by a child. In one or two English sentences, describe the ' +
-    'real-world scene it depicts: every object, person, animal and background element, their colors, and where each ' +
-    'one is placed. Describe the real things, not the drawing.' +
+    'This is a rough hand-drawn sketch, maybe drawn by a child. In two or three English sentences, describe the ' +
+    'real-world photo this sketch stands for: every object, person, animal and background element, their colors, ' +
+    'size, and where each one is placed (left, right, top, bottom, center). Read the drawing\'s symbols as the real ' +
+    'things they stand for: a stick figure is a real person (say man, woman or child, and what they wear), blue ' +
+    'squiggles under a boat are sea waves, a yellow circle with lines is the sun. Describe only the real scene, ' +
+    'never the drawing, its lines or its style.' +
     (desc ? ' The person who drew it says (maybe in Hebrew): "' + desc + '". Use that to identify the elements.' : '') +
     ' Reply with the description only.';
   try {
@@ -93,7 +105,7 @@ async function describe(env, bytes, type, desc) {
   } catch {}
 
   // No vision description: FLUX only understands English, so translate a Hebrew description.
-  if (!desc || !/[֐-׿]/.test(desc)) return desc;
+  if (!desc || !/[\u0590-\u05ff]/.test(desc)) return desc;
   try {
     const r = await env.AI.run(TEXT_MODEL, {
       messages: [
