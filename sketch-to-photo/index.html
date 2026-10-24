@@ -103,6 +103,13 @@
   }
   textarea::placeholder { color: var(--muted); }
 
+  .modes { display: flex; gap: 6px; background: var(--panel); border-radius: var(--radius); padding: 4px; }
+  .modes[hidden] { display: none; }
+  .modes button {
+    flex: 1; padding: 9px 6px; border-radius: 10px; background: transparent; color: var(--muted); font-size: .92rem;
+  }
+  .modes button.on { background: var(--panel-2); color: var(--text); font-weight: 600; }
+
   .primary {
     width: 100%;
     padding: 15px;
@@ -195,6 +202,11 @@
     </div>
 
     <textarea id="desc" rows="2" placeholder="מה ציירת? (לא חובה, אבל עוזר) — למשל: ״דייג על סירת עץ בים בשקיעה״"></textarea>
+
+    <div class="modes" id="modes" role="radiogroup" aria-label="סגנון">
+      <button type="button" data-mode="follow" role="radio">🎯 צמוד לציור</button>
+      <button type="button" data-mode="free" role="radio">📷 מציאותי יותר</button>
+    </div>
 
     <div class="error" id="error"></div>
     <button class="primary" id="generate">✨ צור תמונה</button>
@@ -319,7 +331,24 @@
     store.set('key.' + p, settings.keys[p]);
     store.set('model.' + p, settings.models[p]);
     showError('');
+    showModes();
   });
+
+  // Cloudflare only: 'follow' sends the sketch as a layout guide, 'free' sends just the scene description.
+  let mode = store.get('mode', 'follow');
+  function showModes() {
+    $('modes').hidden = settings.provider !== 'cloudflare';
+    document.querySelectorAll('#modes button').forEach(b => {
+      b.classList.toggle('on', b.dataset.mode === mode);
+      b.setAttribute('aria-checked', b.dataset.mode === mode);
+    });
+  }
+  document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    store.set('mode', mode);
+    showModes();
+  }));
+  showModes();
 
   // ---------- Drawing ----------
   const pad = $('pad');
@@ -528,6 +557,7 @@
     const form = new FormData();
     form.append('image', await smallPadBlob(480), 'sketch.png');
     form.append('description', desc);
+    form.append('mode', mode);
     const headers = {};
     if (password) headers['X-App-Password'] = password;
     const res = await fetch(url, { method: 'POST', headers, body: form });
