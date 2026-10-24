@@ -1,8 +1,9 @@
 // Offline support for the installed app.
 // Pages: network first, so a new version on GitHub Pages arrives on the next open; the cache is the offline fallback.
 // GitHub Pages sends max-age=600, so pages are fetched with cache: 'no-cache' to skip the browser's 10-minute HTTP cache.
+// The manifest too, so a changed install id or scope reaches the phone.
 // Everything else (icons, fonts): cache first.
-const CACHE = 'zombie-roof-v2';
+const CACHE = 'zombie-roof-v3';
 const CORE = [
   './',
   './index.html',
@@ -37,7 +38,7 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const isPage = req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
+  const isPage = req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/') || url.pathname.endsWith('.webmanifest');
 
   if (url.origin === location.origin && isPage) {
     e.respondWith(
