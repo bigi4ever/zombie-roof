@@ -249,7 +249,7 @@
   const PROVIDERS = {
     gemini: {
       model: 'gemini-2.5-flash-image',
-      note: 'מפתח חינמי אפשר לקבל ב-<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. אם גוגל הוציאה מודל תמונות חדש יותר, אפשר לכתוב את שמו בשדה המודל.',
+      note: 'מפתח מקבלים ב-<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. יצירת תמונות לא כלולה בתוכנית החינמית: צריך להפעיל שם חיוב (Billing), בערך 4 סנט לתמונה. אם גוגל הוציאה מודל תמונות חדש יותר, אפשר לכתוב את שמו בשדה המודל.',
     },
     openai: {
       model: 'gpt-image-1',
@@ -427,6 +427,12 @@
     } catch {}
     if (res.status === 401 || res.status === 403 || /api key/i.test(msg)) return new Error('המפתח לא התקבל. בדקו אותו בהגדרות.\n(' + msg + ')');
     if (res.status === 404) return new Error('המודל לא נמצא. בדקו את שם המודל בהגדרות.\n(' + msg + ')');
+    // Gemini's free tier has no image-generation quota at all: the 429 says "free_tier ... limit: 0".
+    if (res.status === 429 && /free_tier/i.test(msg) && /limit: 0\b/.test(msg)) {
+      return new Error('התוכנית החינמית של Gemini לא כוללת יצירת תמונות.\n' +
+        'כדי שזה יעבוד: ב-Google AI Studio מפעילים חיוב (Billing) לפרויקט של המפתח — בערך 4 סנט לתמונה — ' +
+        'או עוברים ל-OpenAI בהגדרות ⚙️.');
+    }
     if (res.status === 429) return new Error('יותר מדי בקשות או שנגמרה המכסה. נסו שוב בעוד רגע.\n(' + msg + ')');
     return new Error(msg);
   }
