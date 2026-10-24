@@ -4,7 +4,7 @@
   "description": "מגינים על גג הבניין מפני זומבים מטפסים, עם טילים וחנות שדרוגים.",
   "lang": "he",
   "dir": "rtl",
-  "id": "./zombie-roof.html",
+  "id": "./zombie-roof-game",
   "start_url": "./zombie-roof.html",
   "scope": "./zombie-roof",
   "display": "fullscreen",
