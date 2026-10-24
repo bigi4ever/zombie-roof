@@ -6,7 +6,7 @@
   "dir": "rtl",
   "id": "./zombie-roof.html",
   "start_url": "./zombie-roof.html",
-  "scope": "./",
+  "scope": "./zombie-roof",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
   "orientation": "landscape",
